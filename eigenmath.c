@@ -35,12 +35,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <setjmp.h>
 #include <math.h>
 #include <errno.h>
+#include "py/misc.h"
+#include "py/runtime.h"
+#include "py/objstr.h"
 
-#define STACKSIZE 100000 // evaluation stack
-#define BLOCKSIZE 10000
-#define MAXBLOCKS 2000
 #define BUCKETSIZE 100
-#define STRBUFLEN 1000
 #define MAXDIM 24
 
 // MAXBLOCKS * BLOCKSIZE = 20,000,000 atoms
@@ -112,7 +111,7 @@ struct tensor {
 #define USYM		3
 #define RATIONAL	4
 #define DOUBLE		5
-#define STR		6
+#define STR		    6
 #define TENSOR		7
 
 // symbol table
@@ -345,15 +344,30 @@ struct tensor {
 #define BLUE 1
 #define RED 2
 
+uint32_t STACKSIZE = 100000; // evaluation stack
+uint32_t BLOCKSIZE = 10000;
+uint32_t MAXBLOCKS = 2000;
+uint32_t STRBUFLEN = 1000;
+
 #define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
 
-extern struct atom *mem[MAXBLOCKS]; // an array of pointers
-extern struct atom *free_list;
+//extern struct atom *mem[MAXBLOCKS]; // an array of pointers
+struct atom **mem = NULL;
+
+
+//extern struct atom *stack[STACKSIZE];
+struct atom **stack = NULL; // 
+//extern struct atom *symtab[27 * BUCKETSIZE];
+struct atom **symtab = NULL; // symbol table
+//extern struct atom *binding[27 * BUCKETSIZE];
+struct atom **binding = NULL;
+//extern struct atom *usrfunc[27 * BUCKETSIZE];
+struct atom **usrfunc = NULL;
+//char strbuf[STRBUFLEN];
+char *strbuf = NULL;
+
 extern int tos; // top of stack
-extern struct atom *stack[STACKSIZE];
-extern struct atom *symtab[27 * BUCKETSIZE];
-extern struct atom *binding[27 * BUCKETSIZE];
-extern struct atom *usrfunc[27 * BUCKETSIZE];
+extern struct atom *free_list;
 extern struct atom *zero;
 extern struct atom *one;
 extern struct atom *minusone;
@@ -901,6 +915,112 @@ void set_symbol(struct atom *p1, struct atom *p2, struct atom *p3);
 struct atom * get_binding(struct atom *p1);
 struct atom * get_usrfunc(struct atom *p);
 void init_symbol_table(void);
+
+
+
+
+typedef struct _mp_obj_eigenmath_t {
+    mp_obj_base_t base;
+	uint8_t *pBuff;
+} mp_obj_eigenmath_t;
+
+uint32_t calculate_stacksize(stacksize,strbuflen){
+	uint32_t memsize = 0;
+	memsize += stacksize * sizeof(struct atom *); // stack
+	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // symtab
+	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // binding
+	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // usrfunc
+	memsize += strbuflen; // strbuf
+	return memsize;
+}
+
+STATIC mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
+	size_t n_args, size_t n_kw,
+	const mp_obj_t *args) {
+	mp_arg_check_num(n_args, n_kw, 4, 4, false);
+
+	mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
+	self->base.type = type;
+
+	STACKSIZE  = mp_obj_get_int(args[0]);
+	BLOCKSIZE  = mp_obj_get_int(args[1]);
+	MAXBLOCKS  = mp_obj_get_int(args[2]);
+	STRBUFLEN  = mp_obj_get_int(args[3]);
+	uint32_t memsize = calculate_stacksize(STACKSIZE,STRBUFLEN); 
+	
+	self.buff = m_new(uint8_t, memsize);
+	memset(self.buff, 0, memsize);
+	
+	//extern struct atom *stack[STACKSIZE];
+	struct atom **stack = (struct atom **)(self.buff); // 
+//extern struct atom *symtab[27 * BUCKETSIZE];
+	symtab = (struct atom **)(self.buff+);
+//extern struct atom *binding[27 * BUCKETSIZE];
+	binding = (struct atom **)(self.buff+);
+//extern struct atom *usrfunc[27 * BUCKETSIZE];
+	usrfunc = (struct atom **)(self.buff+);
+//char strbuf[STRBUFLEN];
+	strbuf = (char *)(self.buff+);
+
+
+
+	return MP_OBJ_FROM_PTR(self);
+}
+
+// run(self, input_str)
+STATIC mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
+mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	const char *input = mp_obj_str_get_str(input_str_obj);
+
+	return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+
+// 析构函数
+STATIC void eigenmath_del(mp_obj_t self_in) {
+	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	if (self->buff) {
+	m_del(char, self->strbuf, self->strbuflen);
+	self->strbuf = NULL;
+	}
+}
+
+// 类型定义
+STATIC const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
+};
+STATIC MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
+
+STATIC const mp_obj_type_t eigenmath_type = {
+	{ &mp_type_type },
+	.name = MP_QSTR_EigenMath,
+	.make_new = eigenmath_make_new,
+	.locals_dict = (mp_obj_dict_t*)&eigenmath_locals_dict,
+	.unary_op = NULL,
+	.attr = NULL,
+	.buffer_p = NULL,
+	.protocol = NULL,
+	.parent = NULL,
+	.flags = 0,
+	.print = NULL,
+	.del = eigenmath_del, // 注册析构函数
+};
+
+// 模块全局字典
+STATIC const mp_rom_map_elem_t eigenmath_module_globals_table[] = {
+{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_eigenmath) },
+{ MP_ROM_QSTR(MP_QSTR_EigenMath), MP_ROM_PTR(&eigenmath_type) },
+};
+STATIC MP_DEFINE_CONST_DICT(mp_module_eigenmath_globals, eigenmath_module_globals_table);
+
+const mp_obj_module_t eigenmath_user_cmodule = {
+.base = { &mp_type_module },
+.globals = (mp_obj_dict_t*)&mp_module_eigenmath_globals,
+};
+
+MP_REGISTER_MODULE(MP_QSTR_eigenmath, eigenmath_user_cmodule);
+
+
 struct atom *
 alloc_atom(void)
 {
@@ -996,7 +1116,7 @@ alloc_str(void)
 void *
 alloc_mem(int n)
 {
-	void *p = malloc(n);
+	void *p = m_malloc(n);
 	if (p == NULL)
 		exit(1);
 	return p;
@@ -1463,7 +1583,7 @@ mnew(int n)
 void
 mfree(uint32_t *u)
 {
-	free(u - 1);
+	m_free(u - 1);
 	bignum_count--;
 }
 
@@ -12436,7 +12556,7 @@ read_file(char *filename)
 
 	n = (int) t;
 
-	buf = malloc(n + 1);
+	buf = m_malloc(n + 1);
 
 	if (buf == NULL) {
 		close(fd);
@@ -16478,11 +16598,11 @@ struct atom *free_list;
 
 int tos; // top of stack
 
-struct atom *stack[STACKSIZE];
+//struct atom *stack[STACKSIZE];
 
-struct atom *symtab[27 * BUCKETSIZE];
-struct atom *binding[27 * BUCKETSIZE];
-struct atom *usrfunc[27 * BUCKETSIZE];
+//struct atom *symtab[27 * BUCKETSIZE];
+//struct atom *binding[27 * BUCKETSIZE];
+//struct atom *usrfunc[27 * BUCKETSIZE];
 
 struct atom *zero;
 struct atom *one;
@@ -16512,7 +16632,7 @@ int tensor_count;
 int max_eval_level;
 int max_tos;
 
-char strbuf[STRBUFLEN];
+
 
 char *outbuf;
 int outbuf_index;
