@@ -35,12 +35,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <setjmp.h>
 #include <math.h>
 #include <errno.h>
+#include "py/obj.h"
+#include "py/mpconfig.h"
 #include "py/misc.h"
 #include "py/runtime.h"
 #include "py/objstr.h"
 
-#define BUCKETSIZE 100
+//#define STACKSIZE 2048 // evaluation stack
+//#define BLOCKSIZE 512
+//#define MAXBLOCKS 20
+
+#define STRBUFLEN 1000
+#define BUCKETSIZE 50
 #define MAXDIM 24
+
+//#define MAXOUTPUTBUFF 1024
 
 // MAXBLOCKS * BLOCKSIZE = 20,000,000 atoms
 
@@ -344,13 +353,13 @@ struct tensor {
 #define BLUE 1
 #define RED 2
 
-uint32_t STACKSIZE = 100000; // evaluation stack
-uint32_t BLOCKSIZE = 10000;
-uint32_t MAXBLOCKS = 2000;
-uint32_t STRBUFLEN = 1000;
+uint32_t STACKSIZE = 2048; // evaluation stack
+uint32_t BLOCKSIZE = 512;
+uint32_t MAXBLOCKS = 20;
 
-#define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
 
+//#define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
+#define Trace mp_printf(&mp_plat_print, "[TRACE] %s:%d\n", __func__, __LINE__)
 //extern struct atom *mem[MAXBLOCKS]; // an array of pointers
 struct atom **mem = NULL;
 
@@ -363,41 +372,43 @@ struct atom **symtab = NULL; // symbol table
 struct atom **binding = NULL;
 //extern struct atom *usrfunc[27 * BUCKETSIZE];
 struct atom **usrfunc = NULL;
-//char strbuf[STRBUFLEN];
 char *strbuf = NULL;
+//char *outbuf=NULL;
 
-extern int tos; // top of stack
-extern struct atom *free_list;
-extern struct atom *zero;
-extern struct atom *one;
-extern struct atom *minusone;
-extern struct atom *imaginaryunit;
-extern int eval_level;
-extern int gc_level;
-extern int expanding;
-extern int drawing;
-extern int nonstop;
-extern int interrupt;
-extern jmp_buf jmpbuf0;
-extern jmp_buf jmpbuf1;
-extern char *trace1;
-extern char *trace2;
-extern int alloc_count;
-extern int block_count;
-extern int free_count;
-extern int gc_count;
-extern int bignum_count;
-extern int ksym_count;
-extern int usym_count;
-extern int string_count;
-extern int tensor_count;
-extern int max_eval_level;
-extern int max_tos;
-extern int max_tof;
-extern char strbuf[];
-extern char *outbuf;
-extern int outbuf_index;
-extern int outbuf_length;
+
+int tos; // top of stack
+struct atom *free_list;
+struct atom *zero;
+struct atom *one;
+struct atom *minusone;
+struct atom *imaginaryunit;
+int eval_level;
+int gc_level;
+int expanding;
+int drawing;
+int nonstop;
+int interrupt;
+jmp_buf jmpbuf0;
+jmp_buf jmpbuf1;
+char *trace1;
+char *trace2;
+int alloc_count;
+int block_count;
+int free_count;
+int gc_count;
+int bignum_count;
+int ksym_count;
+int usym_count;
+int string_count;
+int tensor_count;
+int max_eval_level;
+int max_tos;
+int max_tof;
+char *outbuf;
+int outbuf_index;
+int outbuf_length;
+
+
 struct atom * alloc_atom(void);
 void alloc_block(void);
 struct atom * alloc_vector(int nrow);
@@ -824,9 +835,9 @@ void fmt_draw_table(int x, int y, struct atom *p);
 void fmt_putw(uint32_t w);
 void gc(void);
 void untag(struct atom *p);
-int main(int argc, char *argv[]);
+//int main(int argc, char *argv[]);
 void run_infile(char *infile);
-void run_stdin(void);
+
 void display(void);
 void printbuf(char *s, int color);
 void eval_draw(struct atom *p1);
@@ -922,22 +933,15 @@ void init_symbol_table(void);
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
 	uint8_t *pBuff;
+	//uint32_t buffize;
 } mp_obj_eigenmath_t;
 
-uint32_t calculate_stacksize(stacksize,strbuflen){
-	uint32_t memsize = 0;
-	memsize += stacksize * sizeof(struct atom *); // stack
-	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // symtab
-	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // binding
-	memsize += (27 * BUCKETSIZE) * sizeof(struct atom *); // usrfunc
-	memsize += strbuflen; // strbuf
-	return memsize;
-}
 
-STATIC mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
+
+static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	size_t n_args, size_t n_kw,
 	const mp_obj_t *args) {
-	mp_arg_check_num(n_args, n_kw, 4, 4, false);
+	mp_arg_check_num(n_args, n_kw, 3, 3, false);
 
 	mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
 	self->base.type = type;
@@ -945,53 +949,70 @@ STATIC mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	STACKSIZE  = mp_obj_get_int(args[0]);
 	BLOCKSIZE  = mp_obj_get_int(args[1]);
 	MAXBLOCKS  = mp_obj_get_int(args[2]);
-	STRBUFLEN  = mp_obj_get_int(args[3]);
-	uint32_t memsize = calculate_stacksize(STACKSIZE,STRBUFLEN); 
-	
-	self.buff = m_new(uint8_t, memsize);
-	memset(self.buff, 0, memsize);
+	uint32_t sizeOfAtom = sizeof(struct atom);
+	uint32_t memsize = STACKSIZE * sizeOfAtom+ (27 * BUCKETSIZE) * sizeOfAtom * 3 + sizeOfAtom*MAXBLOCKS+STRBUFLEN; // symtab, binding, usrfunc
+	uint32_t shift = 0;
+	//self.buffsize = memsize;
+	self->pBuff = m_new(uint8_t, memsize);
+	memset(self->pBuff, 0, memsize);
 	
 	//extern struct atom *stack[STACKSIZE];
-	struct atom **stack = (struct atom **)(self.buff); // 
+	struct atom **stack = (struct atom **)(self->pBuff); // 
+	shift = STACKSIZE * sizeOfAtom;
 //extern struct atom *symtab[27 * BUCKETSIZE];
-	symtab = (struct atom **)(self.buff+);
+	symtab = (struct atom **)(self->pBuff+shift);
+	shift += (27 * BUCKETSIZE) * sizeOfAtom;
 //extern struct atom *binding[27 * BUCKETSIZE];
-	binding = (struct atom **)(self.buff+);
+	binding = (struct atom **)(self->pBuff+shift);
+	shift += (27 * BUCKETSIZE) * sizeOfAtom;
 //extern struct atom *usrfunc[27 * BUCKETSIZE];
-	usrfunc = (struct atom **)(self.buff+);
-//char strbuf[STRBUFLEN];
-	strbuf = (char *)(self.buff+);
+	usrfunc = (struct atom **)(self->pBuff+shift);
+	shift += (27 * BUCKETSIZE) * sizeOfAtom;
+	mem = (struct atom **)(self->pBuff+shift); // an array of pointers
+	shift += sizeOfAtom*MAXBLOCKS; // an array of pointers
+	strbuf = (char *)(self->pBuff+shift); // string buffer
 
-
-
+	outbuf =(char *)m_malloc(1000); // output buffer
+	outbuf_length = 1000;
+	outbuf_index = 0;
 	return MP_OBJ_FROM_PTR(self);
 }
 
 // run(self, input_str)
-STATIC mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
-mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	const char *input = mp_obj_str_get_str(input_str_obj);
-
-	return mp_const_none;
+static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	const char *str;
+	size_t str_len;
+	GET_STR_DATA_LEN(input_str_obj, str, str_len);
+	char *cmdBuffer = (char *)m_malloc(str_len+1);
+	memcpy(cmdBuffer, str, str_len);
+    run(cmdBuffer);
+	m_free(cmdBuffer);
+    return mp_obj_new_str(outbuf, strlen(outbuf));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
-// 析构函数
-STATIC void eigenmath_del(mp_obj_t self_in) {
+
+static void eigenmath_del(mp_obj_t self_in) {
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	if (self->buff) {
-	m_del(char, self->strbuf, self->strbuflen);
-	self->strbuf = NULL;
+	if (self->pBuff) {
+		//m_del(uint8_t, self->buff, self->self.buffsize);
+		m_free(self->pBuff);
+		self->pBuff= NULL;
+	}
+	if (outbuf) {
+		m_free(outbuf);
+		outbuf = NULL;
 	}
 }
 
-// 类型定义
-STATIC const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
+
+static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
 };
-STATIC MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
+static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
 
-STATIC const mp_obj_type_t eigenmath_type = {
+static const mp_obj_type_t eigenmath_type = {
 	{ &mp_type_type },
 	.name = MP_QSTR_EigenMath,
 	.make_new = eigenmath_make_new,
@@ -1003,15 +1024,15 @@ STATIC const mp_obj_type_t eigenmath_type = {
 	.parent = NULL,
 	.flags = 0,
 	.print = NULL,
-	.del = eigenmath_del, // 注册析构函数
+	.del = eigenmath_del, 
 };
 
-// 模块全局字典
-STATIC const mp_rom_map_elem_t eigenmath_module_globals_table[] = {
+
+static const mp_rom_map_elem_t eigenmath_module_globals_table[] = {
 { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_eigenmath) },
 { MP_ROM_QSTR(MP_QSTR_EigenMath), MP_ROM_PTR(&eigenmath_type) },
 };
-STATIC MP_DEFINE_CONST_DICT(mp_module_eigenmath_globals, eigenmath_module_globals_table);
+static MP_DEFINE_CONST_DICT(mp_module_eigenmath_globals, eigenmath_module_globals_table);
 
 const mp_obj_module_t eigenmath_user_cmodule = {
 .base = { &mp_type_module },
@@ -12575,6 +12596,7 @@ read_file(char *filename)
 
 	return buf;
 }
+
 void
 eval_setq(struct atom *p1)
 {
@@ -15150,10 +15172,12 @@ factor_int(int n)
 #define BDLDAL 0xe29490 // BOX DRAW LIGHT DOWN AND LEFT
 #define BDLUAR 0xe29494 // BOX DRAW LIGHT UP AND RIGHT
 #define BDLUAL 0xe29498 // BOX DRAW LIGHT UP AND LEFT
-
+#ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-
+#endif
 int fmt_level;
 int fmt_nrow;
 int fmt_ncol;
@@ -16593,10 +16617,10 @@ untag(struct atom *p)
 		for (i = 0; i < p->u.tensor->nelem; i++)
 			untag(p->u.tensor->elem[i]);
 }
-struct atom *mem[MAXBLOCKS]; // an array of pointers
-struct atom *free_list;
 
-int tos; // top of stack
+
+
+
 
 //struct atom *stack[STACKSIZE];
 
@@ -16604,39 +16628,7 @@ int tos; // top of stack
 //struct atom *binding[27 * BUCKETSIZE];
 //struct atom *usrfunc[27 * BUCKETSIZE];
 
-struct atom *zero;
-struct atom *one;
-struct atom *minusone;
-struct atom *imaginaryunit;
-
-int eval_level;
-int gc_level;
-int expanding;
-int drawing;
-int nonstop;
-int interrupt;
-jmp_buf jmpbuf0;
-jmp_buf jmpbuf1;
-char *trace1;
-char *trace2;
-
-int alloc_count;
-int block_count;
-int free_count;
-int gc_count;
-int bignum_count;
-int ksym_count;
-int usym_count;
-int string_count;
-int tensor_count;
-int max_eval_level;
-int max_tos;
-
-
-
-char *outbuf;
-int outbuf_index;
-int outbuf_length;
+/*
 int
 main(int argc, char *argv[])
 {
@@ -16646,7 +16638,7 @@ main(int argc, char *argv[])
 	if (isatty(fileno(stdout)))
 		run_stdin();
 }
-
+*/
 void
 run_infile(char *infile)
 {
@@ -16657,20 +16649,10 @@ run_infile(char *infile)
 		exit(1);
 	}
 	run(buf);
-	free(buf);
+	m_free(buf);
 }
 
-void
-run_stdin(void)
-{
-	static char inbuf[1000];
-	for (;;) {
-		fputs("? ", stdout);
-		fflush(stdout);
-		fgets(inbuf, sizeof inbuf, stdin);
-		run(inbuf);
-	}
-}
+
 
 void
 display(void)
@@ -16681,7 +16663,20 @@ display(void)
 void
 printbuf(char *s, int color)
 {
-	fputs(s, stdout);
+	//fputs(s, stdout);
+	switch (color) {
+	case 0:
+		mp_printf(&mp_plat_print, "\x1b[37;40m%s\x1b[0m", s);//black
+		break;
+	case 1:
+		mp_printf(&mp_plat_print, "\x1b[37;44m%s\x1b[0m", s); // blue
+		break;
+	case 2:
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", s); // red
+		break;
+	}
+	//mp_printf(&mp_plat_print, "message");
+
 }
 
 void
@@ -16695,7 +16690,8 @@ void
 eval_exit(struct atom *p1)
 {
 	(void) p1; // silence compiler
-	exit(0);
+	//exit(0);
+	longjmp(jmpbuf0, 1);
 }
 void
 numden(void)
@@ -16811,8 +16807,26 @@ void
 outbuf_init(void)
 {
 	outbuf_index = 0;
-	outbuf_puts(""); // init outbuf as empty string
+	//outbuf_puts(""); // init outbuf as empty string
 }
+
+void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
+    void *new_ptr = m_malloc(new_size);
+    if (!new_ptr) {
+        // optional: raise error or return NULL
+        return NULL;
+    }
+
+    if (old_ptr && old_size > 0) {
+        // copy old data to new block
+        size_t copy_size = old_size < new_size ? old_size : new_size;
+        memcpy(new_ptr, old_ptr, copy_size);
+        m_free(old_ptr);
+    }
+
+    return new_ptr;
+}
+
 
 void
 outbuf_puts(char *s)
@@ -16828,9 +16842,11 @@ outbuf_puts(char *s)
 	m = 1000 * ((outbuf_index + len) / 1000 + 1); // m is a multiple of 1000
 
 	if (m > outbuf_length) {
-		outbuf = realloc(outbuf, m);
+		//outbuf = realloc(outbuf, m);
+		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
 		if (outbuf == NULL)
-			exit(1);
+			//exit(1);
+			longjmp(jmpbuf0, 1);
 		outbuf_length = m;
 	}
 
@@ -16850,9 +16866,11 @@ outbuf_putc(int c)
 	m = 1000 * ((outbuf_index + 1) / 1000 + 1); // m is a multiple of 1000
 
 	if (m > outbuf_length) {
-		outbuf = realloc(outbuf, m);
+		//outbuf = realloc(outbuf, m);
+		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
 		if (outbuf == NULL)
-			exit(1);
+			//exit(1);
+			longjmp(jmpbuf0, 1);
 		outbuf_length = m;
 	}
 
@@ -18062,7 +18080,8 @@ push_string(char *s)
 	p = alloc_str();
 	s = strdup(s);
 	if (s == NULL)
-		exit(1);
+		//exit(1);
+		longjmp(jmpbuf0, 1);
 	p->u.str = s;
 	push(p);
 }
@@ -18109,7 +18128,8 @@ lookup(char *s)
 	p = alloc_atom();
 	s = strdup(s);
 	if (s == NULL)
-		exit(1);
+		//exit(1);
+		longjmp(jmpbuf0, 1);
 	p->atomtype = USYM;
 	p->u.usym.name = s;
 	p->u.usym.index = k + i;
@@ -18172,100 +18192,100 @@ struct se {
 	{ "adj",		ADJ,		eval_adj		},
 	{ "and",		AND,		eval_and		},
 	{ "arccos",		ARCCOS,		eval_arccos		},
-	{ "arccosh",		ARCCOSH,	eval_arccosh		},
+	{ "arccosh",	ARCCOSH,	eval_arccosh	},
 	{ "arcsin",		ARCSIN,		eval_arcsin		},
-	{ "arcsinh",		ARCSINH,	eval_arcsinh		},
+	{ "arcsinh",	ARCSINH,	eval_arcsinh	},
 	{ "arctan",		ARCTAN,		eval_arctan		},
-	{ "arctanh",		ARCTANH,	eval_arctanh		},
+	{ "arctanh",	ARCTANH,	eval_arctanh	},
 	{ "arg",		ARG,		eval_arg		},
 
-	{ "binding",		BINDING,	eval_binding		},
+	{ "binding",	BINDING,	eval_binding	},
 
 	{ "C",			C_UPPER,	NULL			},
 	{ "c",			C_LOWER,	NULL			},
-	{ "ceiling",		CEILING,	eval_ceiling		},
+	{ "ceiling",	CEILING,	eval_ceiling	},
 	{ "check",		CHECK,		eval_check		},
-	{ "circexp",		CIRCEXP,	eval_expform		},
+	{ "circexp",	CIRCEXP,	eval_expform	},
 	{ "clear",		CLEAR,		eval_clear		},
 	{ "clock",		CLOCK,		eval_clock		},
-	{ "cofactor",		COFACTOR,	eval_cofactor		},
+	{ "cofactor",	COFACTOR,	eval_cofactor	},
 	{ "conj",		CONJ,		eval_conj		},
-	{ "contract",		CONTRACT,	eval_contract		},
+	{ "contract",	CONTRACT,	eval_contract	},
 	{ "cos",		COS,		eval_cos		},
 	{ "cosh",		COSH,		eval_cosh		},
 
 	{ "D",			D_UPPER,	NULL			},
 	{ "d",			D_LOWER,	NULL			},
 	{ "defint",		DEFINT,		eval_defint		},
-	{ "denominator",	DENOMINATOR,	eval_denominator	},
-	{ "derivative",		DERIVATIVE,	eval_derivative		},
+	{ "denominator",DENOMINATOR,eval_denominator},
+	{ "derivative",	DERIVATIVE,	eval_derivative	},
 	{ "det",		DET,		eval_det		},
 	{ "dim",		DIM,		eval_dim		},
-	{ "do",			DO,		eval_do			},
+	{ "do",			DO,			eval_do			},
 	{ "dot",		DOT,		eval_inner		},
 	{ "draw",		DRAW,		eval_draw		},
 
-	{ "eigenvec",		EIGENVEC,	eval_eigenvec		},
+	{ "eigenvec",	EIGENVEC,	eval_eigenvec	},
 	{ "erf",		ERF,		eval_erf		},
 	{ "erfc",		ERFC,		eval_erfc		},
 	{ "eval",		EVAL,		eval_eval		},
 	{ "exit",		EXIT,		eval_exit		},
 	{ "exp",		EXP,		eval_exp		},
 	{ "expcos",		EXPCOS,		eval_expcos		},
-	{ "expcosh",		EXPCOSH,	eval_expcosh		},
-	{ "expform",		EXPFORM,	eval_expform		},
+	{ "expcosh",	EXPCOSH,	eval_expcosh	},
+	{ "expform",	EXPFORM,	eval_expform	},
 	{ "expsin",		EXPSIN,		eval_expsin		},
-	{ "expsinh",		EXPSINH,	eval_expsinh		},
+	{ "expsinh",	EXPSINH,	eval_expsinh	},
 	{ "exptan",		EXPTAN,		eval_exptan		},
-	{ "exptanh",		EXPTANH,	eval_exptanh		},
+	{ "exptanh",	EXPTANH,	eval_exptanh	},
 
-	{ "factorial",		FACTORIAL,	eval_factorial		},
+	{ "factorial",	FACTORIAL,	eval_factorial	},
 	{ "float",		FLOATF,		eval_float		},
 	{ "floor",		FLOOR,		eval_floor		},
 	{ "for",		FOR,		eval_for		},
 
 	{ "H",			H_UPPER,	NULL			},
 	{ "h",			H_LOWER,	NULL			},
-	{ "hadamard",		HADAMARD,	eval_hadamard		},
+	{ "hadamard",	HADAMARD,	eval_hadamard	},
 
 	{ "I",			I_UPPER,	NULL			},
 	{ "i",			I_LOWER,	NULL			},
 	{ "imag",		IMAG,		eval_imag		},
-	{ "infixform",		INFIXFORM,	eval_infixform		},
+	{ "infixform",	INFIXFORM,	eval_infixform	},
 	{ "inner",		INNER,		eval_inner		},
-	{ "integral",		INTEGRAL,	eval_integral		},
+	{ "integral",	INTEGRAL,	eval_integral	},
 	{ "inv",		INV,		eval_inv		},
 
 	{ "J",			J_UPPER,	NULL			},
 	{ "j",			J_LOWER,	NULL			},
 
-	{ "kronecker",		KRONECKER,	eval_kronecker		},
+	{ "kronecker",	KRONECKER,	eval_kronecker	},
 
 	{ "last",		LAST,		NULL			},
 	{ "log",		LOG,		eval_log		},
 
 	{ "mag",		MAG,		eval_mag		},
 	{ "minor",		MINOR,		eval_minor		},
-	{ "minormatrix",	MINORMATRIX,	eval_minormatrix	},
+	{ "minormatrix",MINORMATRIX,eval_minormatrix},
 	{ "mod",		MOD,		eval_mod		},
 
 	{ "nil",		NIL,		eval_nil		},
-	{ "noexpand",		NOEXPAND,	eval_noexpand		},
+	{ "noexpand",	NOEXPAND,	eval_noexpand	},
 	{ "not",		NOT,		eval_not		},
 	{ "nroots",		NROOTS,		eval_nroots		},
 	{ "number",		NUMBER,		eval_number		},
-	{ "numerator",		NUMERATOR,	eval_numerator		},
+	{ "numerator",	NUMERATOR,	eval_numerator	},
 
-	{ "or",			OR,		eval_or			},
+	{ "or",			OR,		eval_or				},
 	{ "outer",		OUTER,		eval_outer		},
 
 	{ "p",			P_LOWER,	NULL			},
 	{ "P",			P_UPPER,	NULL			},
-	{ "pi",			PI,		NULL			},
+	{ "pi",			PI,		NULL				},
 	{ "polar",		POLAR,		eval_polar		},
-	{ "prefixform",		PREFIXFORM,	eval_prefixform		},
+	{ "prefixform",	PREFIXFORM,	eval_prefixform	},
 	{ "print",		PRINT,		eval_print		},
-	{ "product",		PRODUCT,	eval_product		},
+	{ "product",	PRODUCT,	eval_product	},
 
 	{ "Q",			Q_UPPER,	NULL			},
 	{ "q",			Q_LOWER,	NULL			},
@@ -18274,7 +18294,7 @@ struct se {
 	{ "R",			R_UPPER,	NULL			},
 	{ "r",			R_LOWER,	NULL			},
 	{ "rank",		RANK,		eval_rank		},
-	{ "rationalize",	RATIONALIZE,	eval_rationalize	},
+	{ "rationalize",RATIONALIZE,eval_rationalize},
 	{ "real",		REAL,		eval_real		},
 	{ "rect",		RECTF,		eval_rect		},
 	{ "roots",		ROOTS,		eval_roots		},
@@ -18284,7 +18304,7 @@ struct se {
 	{ "S",			S_UPPER,	NULL			},
 	{ "s",			S_LOWER,	NULL			},
 	{ "sgn",		SGN,		eval_sgn		},
-	{ "simplify",		SIMPLIFY,	eval_simplify		},
+	{ "simplify",	SIMPLIFY,	eval_simplify	},
 	{ "sin",		SIN,		eval_sin		},
 	{ "sinh",		SINH,		eval_sinh		},
 	{ "sqrt",		SQRT,		eval_sqrt		},
@@ -18304,7 +18324,7 @@ struct se {
 	{ "testle",		TESTLE,		eval_testle		},
 	{ "testlt",		TESTLT,		eval_testlt		},
 	{ "trace",		TRACE,		NULL			},
-	{ "transpose",		TRANSPOSE,	eval_transpose		},
+	{ "transpose",	TRANSPOSE,	eval_transpose	},
 	{ "tty",		TTY,		NULL			},
 
 	{ "U",			U_UPPER,	NULL			},
@@ -18328,14 +18348,14 @@ struct se {
 	{ "zero",		ZERO,		eval_zero		},
 
 	{ "+",			ADD,		eval_add		},
-	{ "*",			MULTIPLY,	eval_multiply		},
+	{ "*",			MULTIPLY,	eval_multiply	},
 	{ "^",			POWER,		eval_power		},
 	{ "[",			INDEX,		eval_index		},
 	{ "=",			SETQ,		eval_setq		},
 	{ "$e",			EXP1,		NULL			},
-	{ "$a",			SA,		NULL			},
-	{ "$b",			SB,		NULL			},
-	{ "$x",			SX,		NULL			},
+	{ "$a",			SA,		NULL				},
+	{ "$b",			SB,		NULL				},
+	{ "$x",			SX,		NULL				},
 	{ "$1",			ARG1,		NULL			},
 	{ "$2",			ARG2,		NULL			},
 	{ "$3",			ARG3,		NULL			},
@@ -18366,7 +18386,8 @@ init_symbol_table(void)
 		p = alloc_atom();
 		s = strdup(stab[i].str);
 		if (s == NULL)
-			exit(1);
+			//exit(1);
+			longjmp(jmpbuf0, 1);
 		if (stab[i].func) {
 			p->atomtype = KSYM;
 			p->u.ksym.name = s;
