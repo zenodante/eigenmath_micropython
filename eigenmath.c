@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "py/misc.h"
 #include "py/runtime.h"
 #include "py/objstr.h"
-
+#include "py/gc.h"
 //#define STACKSIZE 2048 // evaluation stack
 //#define BLOCKSIZE 512
 //#define MAXBLOCKS 20
@@ -1139,7 +1139,8 @@ alloc_mem(int n)
 {
 	void *p = m_malloc(n);
 	if (p == NULL)
-		exit(1);
+		//exit(1);
+		longjmp(jmpbuf0, 1);
 	return p;
 }
 double
@@ -1222,7 +1223,7 @@ mstr(uint32_t *u)
 
 	if (n > len) {
 		if (buf)
-			free(buf);
+			m_free(buf);
 		buf = alloc_mem(n);
 		len = n;
 	}
@@ -1605,6 +1606,7 @@ void
 mfree(uint32_t *u)
 {
 	m_free(u - 1);
+	gc_collect();
 	bignum_count--;
 }
 
@@ -5158,9 +5160,9 @@ eval_eigenvec(struct atom *p1)
 				stopf("eigenvec");
 
 	if (D)
-		free(D);
+		m_free(D);
 	if (Q)
-		free(Q);
+		m_free(Q);
 
 	D = alloc_mem(n * n * sizeof (double));
 	Q = alloc_mem(n * n * sizeof (double));
@@ -7164,7 +7166,7 @@ inner(void)
 
 	push(p3);
 }
-char *integral_tab_exp[] = {
+const char * const integral_tab_exp[] = {
 
 // x^n exp(a x + b)
 
@@ -7407,7 +7409,7 @@ char *integral_tab_exp[] = {
 
 // log(a x) is transformed to log(a) + log(x)
 
-char *integral_tab_log[] = {
+const char * const integral_tab_log[] = {
 
 	"log(x)",
 	"x log(x) - x",
@@ -7454,7 +7456,7 @@ char *integral_tab_log[] = {
 	"1",
 };
 
-char *integral_tab_trig[] = {
+const char * const integral_tab_trig[] = {
 
 	"sin(a x)",
 	"-cos(a x) / a",
@@ -7713,7 +7715,7 @@ char *integral_tab_trig[] = {
 	"1",
 };
 
-char *integral_tab_power[] = {
+const char * const integral_tab_power[] = {
 
 	"a", // for forms c^d where both c and d are constant expressions
 	"a x",
@@ -7834,8 +7836,8 @@ char *integral_tab_power[] = {
 	"1",
 };
 
-char *integral_tab[] = {
-
+//char *integral_tab[] = {
+const char * const integral_tab[] ={
 	"a",
 	"a x",
 	"1",
@@ -9820,9 +9822,9 @@ nroots(void)
 	n = tos - h; // number of coeffs on stack
 
 	if (cr)
-		free(cr);
+		m_free(cr);
 	if (ci)
-		free(ci);
+		m_free(ci);
 
 	cr = alloc_mem(n * sizeof (double));
 	ci = alloc_mem(n * sizeof (double));
@@ -12585,7 +12587,7 @@ read_file(char *filename)
 	}
 
 	if (read(fd, buf, n) != n) {
-		free(buf);
+		m_free(buf);
 		close(fd);
 		return NULL;
 	}
@@ -14494,7 +14496,7 @@ factor_bignum(uint32_t *N, struct atom *M)
 
 #define NPRIME 4792
 
-int primetab[NPRIME] = {
+const int primetab[NPRIME] = {
 2,3,5,7,11,13,17,19,
 23,29,31,37,41,43,47,53,
 59,61,67,71,73,79,83,89,
@@ -15211,7 +15213,7 @@ fmt(void)
 
 	if (m > fmt_buf_len) {
 		if (fmt_buf)
-			free(fmt_buf);
+			m_free(fmt_buf);
 		fmt_buf = alloc_mem(m);
 		fmt_buf_len = m;
 	}
@@ -16560,11 +16562,11 @@ gc(void)
 
 			switch (p->atomtype) {
 			case KSYM:
-				free(p->u.ksym.name);
+				m_free(p->u.ksym.name);
 				ksym_count--;
 				break;
 			case USYM:
-				free(p->u.usym.name);
+				m_free(p->u.usym.name);
 				usym_count--;
 				break;
 			case RATIONAL:
@@ -16573,11 +16575,11 @@ gc(void)
 				break;
 			case STR:
 				if (p->u.str)
-					free(p->u.str);
+					m_free(p->u.str);
 				string_count--;
 				break;
 			case TENSOR:
-				free(p->u.tensor);
+				m_free(p->u.tensor);
 				tensor_count--;
 				break;
 			default:
@@ -16646,7 +16648,8 @@ run_infile(char *infile)
 	buf = read_file(infile);
 	if (buf == NULL) {
 		fprintf(stderr, "cannot read %s\n", infile);
-		exit(1);
+		longjmp(jmpbuf0, 1);
+		//exit(1);
 	}
 	run(buf);
 	m_free(buf);
@@ -16846,6 +16849,7 @@ outbuf_puts(char *s)
 		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
 		if (outbuf == NULL)
 			//exit(1);
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
 			longjmp(jmpbuf0, 1);
 		outbuf_length = m;
 	}
@@ -16870,6 +16874,7 @@ outbuf_putc(int c)
 		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
 		if (outbuf == NULL)
 			//exit(1);
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
 			longjmp(jmpbuf0, 1);
 		outbuf_length = m;
 	}
@@ -17809,7 +17814,7 @@ update_token_buf(char *a, char *b)
 
 	if (m > token_buf_len) {
 		if (token_buf)
-			free(token_buf);
+			m_free(token_buf);
 		token_buf = alloc_mem(m);
 		token_buf_len = m;
 	}
@@ -18081,6 +18086,7 @@ push_string(char *s)
 	s = strdup(s);
 	if (s == NULL)
 		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 		longjmp(jmpbuf0, 1);
 	p->u.str = s;
 	push(p);
@@ -18129,6 +18135,7 @@ lookup(char *s)
 	s = strdup(s);
 	if (s == NULL)
 		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 		longjmp(jmpbuf0, 1);
 	p->atomtype = USYM;
 	p->u.usym.name = s;
@@ -18387,6 +18394,7 @@ init_symbol_table(void)
 		s = strdup(stab[i].str);
 		if (s == NULL)
 			//exit(1);
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 			longjmp(jmpbuf0, 1);
 		if (stab[i].func) {
 			p->atomtype = KSYM;
