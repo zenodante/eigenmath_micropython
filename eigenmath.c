@@ -988,7 +988,10 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	memcpy(cmdBuffer, str, str_len);
     run(cmdBuffer);
 	m_free(cmdBuffer);
-    return mp_obj_new_str(outbuf, strlen(outbuf));
+	if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
+		mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
+	}
+    return mp_obj_new_str(outbuf, strlen((const char *)outbuf));
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
@@ -1175,7 +1178,7 @@ mscan(char *s)
 	int i, k, len;
 	uint32_t *a, *b, *t;
 	a = mint(0);
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 	if (len == 0)
 		return a;
 	k = len % 9;
@@ -15962,7 +15965,7 @@ fmt_symbol_fragment(char *s, int k)
 
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
 		t = symbol_name_tab[i];
-		n = (int) strlen(t);
+		n = (int) strlen((const char *)t);
 		if (strncmp(s + k, t, n) == 0)
 			break;
 	}
@@ -16836,7 +16839,7 @@ outbuf_puts(char *s)
 {
 	int len, m;
 
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 
 	// Let outbuf_index + len == 1000
 
@@ -17574,7 +17577,7 @@ scan_factor(void)
 void
 scan_symbol(void)
 {
-	if (scan_mode && strlen(token_buf) == 1)
+	if (scan_mode && strlen((const char *)token_buf) == 1)
 		switch (token_buf[0]) {
 		case 'a':
 			push_symbol(SA);
