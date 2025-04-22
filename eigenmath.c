@@ -1035,9 +1035,44 @@ static void eigenmath_del(mp_obj_t self_in) {
 	}
 }
 
+STATIC mp_obj_t eigenmath_reset(mp_obj_t self_in) {
+	for (int i = 0; i < block_count; i++) {
+		if (block[i]) {
+			m_free(block[i]);
+			block[i] = NULL;
+		}
+	}
+	block_count = 0;
+	free_list = NULL;
+	
+	// clear stack
+	tos = 0;
+	
+	// clear symbol table
+	for (int i = 0; i < 27 * BUCKETSIZE; i++) {
+		binding[i] = NULL;
+		usrfunc[i] = NULL;
+	}
+	
+	// clear buf
+	strbuf_index = 0;
+	outbuf_index = 0;
+	outbuf[0] = '\0';
+	
+	// triger run rebuild
+	zero = NULL;
+	one = NULL;
+	minusone = NULL;
+	imaginaryunit = NULL;
+
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
+
 
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
 
