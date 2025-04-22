@@ -125,16 +125,16 @@ struct tensor {
 
 // symbol table
 
-#define ABS		(0 * BUCKETSIZE + 0)
-#define ADJ		(0 * BUCKETSIZE + 1)
-#define AND		(0 * BUCKETSIZE + 2)
+#define ABS			(0 * BUCKETSIZE + 0)
+#define ADJ			(0 * BUCKETSIZE + 1)
+#define AND			(0 * BUCKETSIZE + 2)
 #define ARCCOS		(0 * BUCKETSIZE + 3)
 #define ARCCOSH		(0 * BUCKETSIZE + 4)
 #define ARCSIN		(0 * BUCKETSIZE + 5)
 #define ARCSINH		(0 * BUCKETSIZE + 6)
 #define ARCTAN		(0 * BUCKETSIZE + 7)
 #define ARCTANH		(0 * BUCKETSIZE + 8)
-#define ARG		(0 * BUCKETSIZE + 9)
+#define ARG			(0 * BUCKETSIZE + 9)
 
 #define BINDING		(1 * BUCKETSIZE + 0)
 
@@ -148,7 +148,7 @@ struct tensor {
 #define COFACTOR	(2 * BUCKETSIZE + 7)
 #define CONJ		(2 * BUCKETSIZE + 8)
 #define CONTRACT	(2 * BUCKETSIZE + 9)
-#define COS		(2 * BUCKETSIZE + 10)
+#define COS			(2 * BUCKETSIZE + 10)
 #define COSH		(2 * BUCKETSIZE + 11)
 
 #define D_UPPER		(3 * BUCKETSIZE + 0)
@@ -156,18 +156,18 @@ struct tensor {
 #define DEFINT		(3 * BUCKETSIZE + 2)
 #define DENOMINATOR	(3 * BUCKETSIZE + 3)
 #define DERIVATIVE	(3 * BUCKETSIZE + 4)
-#define DET		(3 * BUCKETSIZE + 5)
-#define DIM		(3 * BUCKETSIZE + 6)
-#define DO		(3 * BUCKETSIZE + 7)
-#define DOT		(3 * BUCKETSIZE + 8)
+#define DET			(3 * BUCKETSIZE + 5)
+#define DIM			(3 * BUCKETSIZE + 6)
+#define DO			(3 * BUCKETSIZE + 7)
+#define DOT			(3 * BUCKETSIZE + 8)
 #define DRAW		(3 * BUCKETSIZE + 9)
 
 #define EIGENVEC	(4 * BUCKETSIZE + 0)
-#define ERF		(4 * BUCKETSIZE + 1)
+#define ERF			(4 * BUCKETSIZE + 1)
 #define ERFC		(4 * BUCKETSIZE + 2)
 #define EVAL		(4 * BUCKETSIZE + 3)
 #define EXIT		(4 * BUCKETSIZE + 4)
-#define EXP		(4 * BUCKETSIZE + 5)
+#define EXP			(4 * BUCKETSIZE + 5)
 #define EXPCOS		(4 * BUCKETSIZE + 6)
 #define EXPCOSH		(4 * BUCKETSIZE + 7)
 #define EXPFORM		(4 * BUCKETSIZE + 8)
@@ -179,7 +179,7 @@ struct tensor {
 #define FACTORIAL	(5 * BUCKETSIZE + 0)
 #define FLOATF		(5 * BUCKETSIZE + 1)
 #define FLOOR		(5 * BUCKETSIZE + 2)
-#define FOR		(5 * BUCKETSIZE + 3)
+#define FOR			(5 * BUCKETSIZE + 3)
 
 #define H_UPPER		(7 * BUCKETSIZE + 0)
 #define H_LOWER		(7 * BUCKETSIZE + 1)
@@ -191,7 +191,7 @@ struct tensor {
 #define INFIXFORM	(8 * BUCKETSIZE + 3)
 #define INNER		(8 * BUCKETSIZE + 4)
 #define INTEGRAL	(8 * BUCKETSIZE + 5)
-#define INV		(8 * BUCKETSIZE + 6)
+#define INV			(8 * BUCKETSIZE + 6)
 
 #define J_UPPER		(9 * BUCKETSIZE + 0)
 #define J_LOWER		(9 * BUCKETSIZE + 1)
@@ -199,26 +199,26 @@ struct tensor {
 #define KRONECKER	(10 * BUCKETSIZE + 0)
 
 #define LAST		(11 * BUCKETSIZE + 0)
-#define LOG		(11 * BUCKETSIZE + 1)
+#define LOG			(11 * BUCKETSIZE + 1)
 
-#define MAG		(12 * BUCKETSIZE + 0)
+#define MAG			(12 * BUCKETSIZE + 0)
 #define MINOR		(12 * BUCKETSIZE + 1)
 #define MINORMATRIX	(12 * BUCKETSIZE + 2)
-#define MOD		(12 * BUCKETSIZE + 3)
+#define MOD			(12 * BUCKETSIZE + 3)
 
-#define NIL		(13 * BUCKETSIZE + 0)
+#define NIL			(13 * BUCKETSIZE + 0)
 #define NOEXPAND	(13 * BUCKETSIZE + 1)
-#define NOT		(13 * BUCKETSIZE + 2)
+#define NOT			(13 * BUCKETSIZE + 2)
 #define NROOTS		(13 * BUCKETSIZE + 3)
 #define NUMBER		(13 * BUCKETSIZE + 4)
 #define NUMERATOR	(13 * BUCKETSIZE + 5)
 
-#define OR		(14 * BUCKETSIZE + 0)
+#define OR			(14 * BUCKETSIZE + 0)
 #define OUTER		(14 * BUCKETSIZE + 1)
 
 #define P_UPPER		(15 * BUCKETSIZE + 0)
 #define P_LOWER		(15 * BUCKETSIZE + 1)
-#define PI		(15 * BUCKETSIZE + 2)
+#define PI			(15 * BUCKETSIZE + 2)
 #define POLAR		(15 * BUCKETSIZE + 3)
 #define PREFIXFORM	(15 * BUCKETSIZE + 4)
 #define PRINT		(15 * BUCKETSIZE + 5)
@@ -236,22 +236,22 @@ struct tensor {
 #define RECTF		(17 * BUCKETSIZE + 5)
 #define ROOTS		(17 * BUCKETSIZE + 6)
 #define ROTATE		(17 * BUCKETSIZE + 7)
-#define RUN		(17 * BUCKETSIZE + 8)
+#define RUN			(17 * BUCKETSIZE + 8)
 
 #define S_UPPER		(18 * BUCKETSIZE + 0)
 #define S_LOWER		(18 * BUCKETSIZE + 1)
-#define SGN		(18 * BUCKETSIZE + 2)
+#define SGN			(18 * BUCKETSIZE + 2)
 #define SIMPLIFY	(18 * BUCKETSIZE + 3)
-#define SIN		(18 * BUCKETSIZE + 4)
+#define SIN			(18 * BUCKETSIZE + 4)
 #define SINH		(18 * BUCKETSIZE + 5)
 #define SQRT		(18 * BUCKETSIZE + 6)
 #define STATUS		(18 * BUCKETSIZE + 7)
 #define STOP		(18 * BUCKETSIZE + 8)
-#define SUM		(18 * BUCKETSIZE + 9)
+#define SUM			(18 * BUCKETSIZE + 9)
 
 #define T_UPPER		(19 * BUCKETSIZE + 0)
 #define T_LOWER		(19 * BUCKETSIZE + 1)
-#define TAN		(19 * BUCKETSIZE + 2)
+#define TAN			(19 * BUCKETSIZE + 2)
 #define TANH		(19 * BUCKETSIZE + 3)
 #define TAYLOR		(19 * BUCKETSIZE + 4)
 #define TEST		(19 * BUCKETSIZE + 5)
@@ -262,7 +262,7 @@ struct tensor {
 #define TESTLT		(19 * BUCKETSIZE + 10)
 #define TRACE		(19 * BUCKETSIZE + 11)
 #define TRANSPOSE	(19 * BUCKETSIZE + 12)
-#define TTY		(19 * BUCKETSIZE + 13)
+#define TTY			(19 * BUCKETSIZE + 13)
 
 #define U_UPPER		(20 * BUCKETSIZE + 0)
 #define U_LOWER		(20 * BUCKETSIZE + 1)
@@ -284,15 +284,15 @@ struct tensor {
 #define Z_LOWER		(25 * BUCKETSIZE + 1)
 #define ZERO		(25 * BUCKETSIZE + 2)
 
-#define ADD		(26 * BUCKETSIZE + 0)
+#define ADD			(26 * BUCKETSIZE + 0)
 #define MULTIPLY	(26 * BUCKETSIZE + 1)
 #define POWER		(26 * BUCKETSIZE + 2)
 #define INDEX		(26 * BUCKETSIZE + 3)
 #define SETQ		(26 * BUCKETSIZE + 4)
 #define EXP1		(26 * BUCKETSIZE + 5)
-#define SA		(26 * BUCKETSIZE + 6)
-#define SB		(26 * BUCKETSIZE + 7)
-#define SX		(26 * BUCKETSIZE + 8)
+#define SA			(26 * BUCKETSIZE + 6)
+#define SB			(26 * BUCKETSIZE + 7)
+#define SX			(26 * BUCKETSIZE + 8)
 #define ARG1		(26 * BUCKETSIZE + 9)
 #define ARG2		(26 * BUCKETSIZE + 10)
 #define ARG3		(26 * BUCKETSIZE + 11)
@@ -972,7 +972,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	shift += sizeOfAtom*MAXBLOCKS; // an array of pointers
 	strbuf = (char *)(self->pBuff+shift); // string buffer
 
-	outbuf =(char *)m_malloc(1000); // output buffer
+	outbuf =(char *)m_malloc(1000); // init output buffer
 	outbuf_length = 1000;
 	outbuf_index = 0;
 	return MP_OBJ_FROM_PTR(self);
