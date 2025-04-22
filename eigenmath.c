@@ -949,29 +949,19 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	STACKSIZE  = mp_obj_get_int(args[0]);
 	BLOCKSIZE  = mp_obj_get_int(args[1]);
 	MAXBLOCKS  = mp_obj_get_int(args[2]);
-	uint32_t sizeOfAtom = sizeof(struct atom);
-	uint32_t memsize = STACKSIZE * sizeOfAtom+ (27 * BUCKETSIZE) * sizeOfAtom * 3 + sizeOfAtom*MAXBLOCKS+STRBUFLEN; // symtab, binding, usrfunc
-	uint32_t shift = 0;
-	//self.buffsize = memsize;
-	self->pBuff = m_new(uint8_t, memsize);
-	memset(self->pBuff, 0, memsize);
-	
+	uint32+t sizeOfpAtom = sizeof(struct atom *);	
 	//extern struct atom *stack[STACKSIZE];
-	struct atom **stack = (struct atom **)(self->pBuff); // 
-	shift = STACKSIZE * sizeOfAtom;
-//extern struct atom *symtab[27 * BUCKETSIZE];
-	symtab = (struct atom **)(self->pBuff+shift);
-	shift += (27 * BUCKETSIZE) * sizeOfAtom;
-//extern struct atom *binding[27 * BUCKETSIZE];
-	binding = (struct atom **)(self->pBuff+shift);
-	shift += (27 * BUCKETSIZE) * sizeOfAtom;
-//extern struct atom *usrfunc[27 * BUCKETSIZE];
-	usrfunc = (struct atom **)(self->pBuff+shift);
-	shift += (27 * BUCKETSIZE) * sizeOfAtom;
-	mem = (struct atom **)(self->pBuff+shift); // an array of pointers
-	shift += sizeOfAtom*MAXBLOCKS; // an array of pointers
-	strbuf = (char *)(self->pBuff+shift); // string buffer
+	//extern struct atom *symtab[27 * BUCKETSIZE];
+	//extern struct atom *binding[27 * BUCKETSIZE];
+	//extern struct atom *usrfunc[27 * BUCKETSIZE];
+	//mem = (struct atom **)(self->pBuff+shift); // an array of pointers	
+	stack = (struct atom **)m_malloc(STACKSIZE * sizeOfpAtom);
+	symtab = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	binding = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	usrfunc = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	mem = (struct atom **)m_malloc(MAXBLOCKS * sizeOfpAtom); // an array of pointers
 
+	strbuf = (char *)m_malloc(STRBUFLEN);
 	outbuf =(char *)m_malloc(1000); // init output buffer
 	outbuf_length = 1000;
 	outbuf_index = 0;
@@ -985,27 +975,63 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	size_t str_len;
 	GET_STR_DATA_LEN(input_str_obj, str, str_len);
 	char *cmdBuffer = (char *)m_malloc(str_len+1);
+	if (cmdBuffer == NULL) {
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate memory for command"));
+    }
 	memcpy(cmdBuffer, str, str_len);
-    run(cmdBuffer);
-	m_free(cmdBuffer);
-	if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
-		mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
+	cmdBuffer[str_len] = '\0';
+	mp_obj_t result;
+	nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+		run(cmdBuffer);
+		if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
+            m_free(cmdBuffer);
+            mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
+        }
+		result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
+		m_free(cmdBuffer);
+		nlr_pop();
+	} else {
+		m_free(cmdBuffer);
+        nlr_jump(nlr.ret_val); //
 	}
-    return mp_obj_new_str(outbuf, strlen((const char *)outbuf));
+	return result;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 
 static void eigenmath_del(mp_obj_t self_in) {
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	if (self->pBuff) {
-		//m_del(uint8_t, self->buff, self->self.buffsize);
-		m_free(self->pBuff);
-		self->pBuff= NULL;
+	if(stack) {
+		m_free(stack);
+		stack = NULL;
+	}
+	if(symtab) {
+		m_free(symtab);
+		symtab = NULL;
+	}
+	if(binding) {
+		m_free(binding);
+		binding = NULL;
+	}
+	if(usrfunc) {
+		m_free(usrfunc);
+		usrfunc = NULL;
+	}
+	if(mem) {
+		for (int i = 0; i < block_count; i++) {
+			m_free(mem[i]);
+		}
+		m_free(mem);
+		mem = NULL;
 	}
 	if (outbuf) {
 		m_free(outbuf);
 		outbuf = NULL;
+	}
+	if (strbuf) {
+		m_free(strbuf);
+		strbuf = NULL;
 	}
 }
 
