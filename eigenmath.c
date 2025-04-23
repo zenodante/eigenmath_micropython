@@ -36,7 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 #include <errno.h>
 #include "py/obj.h"
-#include "py/mpconfig.h"
+//#include "py/mpconfig.h"
 #include "py/misc.h"
 #include "py/runtime.h"
 #include "py/objstr.h"
@@ -616,7 +616,7 @@ void integral(void);
 void integral_nib(struct atom *F, struct atom *X);
 void integral_lookup(int h, struct atom *F);
 int integral_classify(struct atom *p);
-int integral_search(int h, struct atom *F, char **table, int n);
+int integral_search(int h, struct atom *F, const char * const*table, int n);
 int integral_search_nib(int h, struct atom *F, struct atom *I, struct atom *C);
 void decomp(void);
 void decomp_sum(struct atom *F, struct atom *X);
@@ -949,7 +949,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	STACKSIZE  = mp_obj_get_int(args[0]);
 	BLOCKSIZE  = mp_obj_get_int(args[1]);
 	MAXBLOCKS  = mp_obj_get_int(args[2]);
-	uint32+t sizeOfpAtom = sizeof(struct atom *);	
+	uint32_t sizeOfpAtom = sizeof(struct atom *);	
 	//extern struct atom *stack[STACKSIZE];
 	//extern struct atom *symtab[27 * BUCKETSIZE];
 	//extern struct atom *binding[27 * BUCKETSIZE];
@@ -971,8 +971,9 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 // run(self, input_str)
 static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	const char *str;
-	size_t str_len;
+	mp_check_self(mp_obj_is_str_or_bytes(input_str_obj));
+	//const char *str;
+	//size_t str_len;
 	GET_STR_DATA_LEN(input_str_obj, str, str_len);
 	char *cmdBuffer = (char *)m_malloc(str_len+1);
 	if (cmdBuffer == NULL) {
@@ -1001,7 +1002,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 
 static void eigenmath_del(mp_obj_t self_in) {
-	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 	if(stack) {
 		m_free(stack);
 		stack = NULL;
@@ -1034,12 +1035,12 @@ static void eigenmath_del(mp_obj_t self_in) {
 		strbuf = NULL;
 	}
 }
-
-STATIC mp_obj_t eigenmath_reset(mp_obj_t self_in) {
+//static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
+static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 	for (int i = 0; i < block_count; i++) {
-		if (block[i]) {
-			m_free(block[i]);
-			block[i] = NULL;
+		if (mem[i]) {
+			m_free(mem[i]);
+			mem[i] = NULL;
 		}
 	}
 	block_count = 0;
@@ -1055,9 +1056,7 @@ STATIC mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 	}
 	
 	// clear buf
-	strbuf_index = 0;
-	outbuf_index = 0;
-	outbuf[0] = '\0';
+	outbuf_init();
 	
 	// triger run rebuild
 	zero = NULL;
@@ -1067,7 +1066,7 @@ STATIC mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 
     return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
 
 
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
@@ -1075,7 +1074,7 @@ static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
-
+/*
 static const mp_obj_type_t eigenmath_type = {
 	{ &mp_type_type },
 	.name = MP_QSTR_EigenMath,
@@ -1090,6 +1089,34 @@ static const mp_obj_type_t eigenmath_type = {
 	.print = NULL,
 	.del = eigenmath_del, 
 };
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    eigenmath_type,              
+    MP_QSTR_EigenMath,           
+    MP_TYPE_FLAG_NONE,           
+    make_new, eigenmath_make_new,
+    locals_dict, &eigenmath_locals_dict,  
+    del, eigenmath_del           
+);*/
+mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
+        eigenmath_del(self_in);
+        return mp_const_none;
+    }
+    
+
+    return MP_OBJ_NULL; 
+}
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    eigenmath_type,
+    MP_QSTR_EigenMath,
+    MP_TYPE_FLAG_NONE,
+    make_new, eigenmath_make_new,
+    locals_dict, &eigenmath_locals_dict,
+    attr, eigenmath_attr
+);
+
 
 
 static const mp_rom_map_elem_t eigenmath_module_globals_table[] = {
@@ -1202,9 +1229,12 @@ void *
 alloc_mem(int n)
 {
 	void *p = m_malloc(n);
-	if (p == NULL)
+	if (p == NULL){
 		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
 		longjmp(jmpbuf0, 1);
+	}
+		
 	return p;
 }
 double
@@ -8357,17 +8387,17 @@ integral_classify(struct atom *p)
 }
 
 int
-integral_search(int h, struct atom *F, char **table, int n)
+integral_search(int h, struct atom *F, const char * const*table, int n)
 {
 	int i;
 	struct atom *C, *I;
 
 	for (i = 0; i < n; i += 3) {
 
-		scan1(table[i + 0]); // integrand
+		scan1((char *)table[i + 0]); // integrand
 		I = pop();
 
-		scan1(table[i + 2]); // condition
+		scan1((char *)table[i + 2]); // condition
 		C = pop();
 
 		if (integral_search_nib(h, F, I, C))
@@ -8379,7 +8409,7 @@ integral_search(int h, struct atom *F, char **table, int n)
 
 	tos = h; // pop all
 
-	scan1(table[i + 1]); // answer
+	scan1((char *)table[i + 1]); // answer
 	evalf();
 
 	return 1;
@@ -9459,7 +9489,8 @@ void
 expand_sum_factors(int h)
 {
 	int i, n;
-	struct atom *p1, *p2;
+	struct atom *p1=NULL;
+	struct atom *p2=NULL;
 
 	if (tos - h < 2)
 		return;
@@ -13527,7 +13558,7 @@ eval_status(struct atom *p1)
 
 	outbuf_init();
 
-	snprintf(strbuf, STRBUFLEN, "block_count %d (%d%%)\n", block_count, 100 * block_count / MAXBLOCKS);
+	snprintf(strbuf, STRBUFLEN, "block_count %d (%lu%%)\n", block_count, 100 * block_count / MAXBLOCKS);
 	outbuf_puts(strbuf);
 
 	snprintf(strbuf, STRBUFLEN, "free_count %d\n", free_count);
@@ -13554,7 +13585,7 @@ eval_status(struct atom *p1)
 	snprintf(strbuf, STRBUFLEN, "max_eval_level %d\n", max_eval_level);
 	outbuf_puts(strbuf);
 
-	snprintf(strbuf, STRBUFLEN, "max_tos %d (%d%%)\n", max_tos, 100 * max_tos / STACKSIZE);
+	snprintf(strbuf, STRBUFLEN, "max_tos %d (%lu%%)\n", max_tos, 100 * max_tos / STACKSIZE);
 	outbuf_puts(strbuf);
 
 	printbuf(outbuf, BLACK);
@@ -16711,7 +16742,8 @@ run_infile(char *infile)
 	char *buf;
 	buf = read_file(infile);
 	if (buf == NULL) {
-		fprintf(stderr, "cannot read %s\n", infile);
+		mp_printf(&mp_plat_print, "\x1b[37;41mcannot read %s\x1b[0m", infile); // red
+		//fprintf(stderr, "cannot read %s\n", infile);
 		longjmp(jmpbuf0, 1);
 		//exit(1);
 	}
@@ -16874,7 +16906,7 @@ void
 outbuf_init(void)
 {
 	outbuf_index = 0;
-	//outbuf_puts(""); // init outbuf as empty string
+	outbuf_puts(""); // init outbuf as empty string
 }
 
 void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
@@ -16911,10 +16943,12 @@ outbuf_puts(char *s)
 	if (m > outbuf_length) {
 		//outbuf = realloc(outbuf, m);
 		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
-		if (outbuf == NULL)
+		if (outbuf == NULL){
 			//exit(1);
 			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
 			longjmp(jmpbuf0, 1);
+		}
+			
 		outbuf_length = m;
 	}
 
@@ -16936,10 +16970,11 @@ outbuf_putc(int c)
 	if (m > outbuf_length) {
 		//outbuf = realloc(outbuf, m);
 		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
-		if (outbuf == NULL)
-			//exit(1);
+		if (outbuf == NULL){
 			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
 			longjmp(jmpbuf0, 1);
+			//exit(1);
+		}		
 		outbuf_length = m;
 	}
 
@@ -17795,12 +17830,12 @@ get_token_nib(void)
 
 	// number?
 
-	if (isdigit(*scan_str) || *scan_str == '.') {
-		while (isdigit(*scan_str))
+	if (isdigit((unsigned char)*scan_str) || *scan_str == '.') {
+		while (isdigit((unsigned char)*scan_str))
 			scan_str++;
 		if (*scan_str == '.') {
 			scan_str++;
-			while (isdigit(*scan_str))
+			while (isdigit((unsigned char)*scan_str))
 				scan_str++;
 			if (token_str + 1 == scan_str)
 				scan_error("expected decimal digit"); // only a decimal point
@@ -17813,8 +17848,8 @@ get_token_nib(void)
 
 	// symbol?
 
-	if (isalpha(*scan_str)) {
-		while (isalnum(*scan_str))
+	if (isalpha((unsigned char)*scan_str)) {
+		while (isalnum((unsigned char)*scan_str))
 			scan_str++;
 		if (*scan_str == '(')
 			token = T_FUNCTION;
@@ -18148,10 +18183,12 @@ push_string(char *s)
 	struct atom *p;
 	p = alloc_str();
 	s = strdup(s);
-	if (s == NULL)
+	if (s == NULL){
 		//exit(1);
 		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 		longjmp(jmpbuf0, 1);
+	}
+		
 	p->u.str = s;
 	push(p);
 }
@@ -18177,9 +18214,9 @@ lookup(char *s)
 	int i, k;
 	struct atom *p;
 
-	if (isupper(*s))
+	if (isupper((unsigned char)*s))
 		k = BUCKETSIZE * (*s - 'A');
-	else if (islower(*s))
+	else if (islower((unsigned char)*s))
 		k = BUCKETSIZE * (*s - 'a');
 	else
 		k = BUCKETSIZE * 26;
@@ -18197,10 +18234,12 @@ lookup(char *s)
 
 	p = alloc_atom();
 	s = strdup(s);
-	if (s == NULL)
+	if (s == NULL){
 		//exit(1);
 		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 		longjmp(jmpbuf0, 1);
+	}
+		
 	p->atomtype = USYM;
 	p->u.usym.name = s;
 	p->u.usym.index = k + i;
@@ -18456,10 +18495,12 @@ init_symbol_table(void)
 	for (i = 0; i < n; i++) {
 		p = alloc_atom();
 		s = strdup(stab[i].str);
-		if (s == NULL)
+		if (s == NULL){
 			//exit(1);
 			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
 			longjmp(jmpbuf0, 1);
+		}
+			
 		if (stab[i].func) {
 			p->atomtype = KSYM;
 			p->u.ksym.name = s;
