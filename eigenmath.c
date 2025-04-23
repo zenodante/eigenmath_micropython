@@ -932,7 +932,7 @@ void init_symbol_table(void);
 
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
-	//uint32_t buffize;
+
 } mp_obj_eigenmath_t;
 
 static void eigenmath_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -948,6 +948,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	//mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
 	mp_obj_eigenmath_t *self = mp_obj_malloc(mp_obj_eigenmath_t, type);
 	self->base.type = type;
+
 
 	STACKSIZE  = mp_obj_get_int(args[0]);
 	BLOCKSIZE  = mp_obj_get_int(args[1]);
@@ -1096,7 +1097,8 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
     locals_dict, &eigenmath_locals_dict,
-    attr, eigenmath_attr,
+    finalize, eigenmath_del,
+	//attr, eigenmath_attr,
 	print, eigenmath_print
 );
 
