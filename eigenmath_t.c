@@ -52,7 +52,7 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 
-static void eigenmath_del(mp_obj_t self_in) {
+static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
     if (self->buffer) {
@@ -60,8 +60,12 @@ static void eigenmath_del(mp_obj_t self_in) {
         self->buffer = NULL;
     }
     self->buffer_size = 0;
+    return mp_const_none;
     
 }
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
+
 //static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 
@@ -70,23 +74,23 @@ static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
 
 
-static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
-	//{ MP_ROM_QSTR(MP_QSTR___init__), MP_ROM_PTR(&mp_identity_obj) },
 
+
+mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
+        dest[0] = MP_OBJ_FROM_PTR(&eigenmath_del_obj);
+        dest[1] = self_in;
+    }
+
+    return MP_OBJ_NULL; 
+}
+
+static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
 
-mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
-    if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
-        eigenmath_del(self_in);
-        return mp_const_none;
-    }
-    
-
-    return MP_OBJ_NULL; 
-}
 
 MP_DEFINE_CONST_OBJ_TYPE(
     eigenmath_type,
