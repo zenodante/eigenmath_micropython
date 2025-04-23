@@ -1025,6 +1025,7 @@ static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 	}
 	if(mem) {
 		for (int i = 0; i < block_count; i++) {
+			if (mem[i] == NULL) continue; // skip empty blocks
 			m_free(mem[i]);
 		}
 		m_free(mem);
@@ -16895,6 +16896,7 @@ void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
     void *new_ptr = m_malloc(new_size);
     if (!new_ptr) {
         // optional: raise error or return NULL
+		m_free(old_ptr); // free old pointer if realloc fails
         return NULL;
     }
 
