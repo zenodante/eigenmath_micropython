@@ -932,10 +932,12 @@ void init_symbol_table(void);
 
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
-	uint8_t *pBuff;
 	//uint32_t buffize;
 } mp_obj_eigenmath_t;
 
+static void eigenmath_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    mp_printf(print, "<EigenMath instance>");
+}
 
 
 static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
@@ -943,7 +945,8 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	const mp_obj_t *args) {
 	mp_arg_check_num(n_args, n_kw, 3, 3, false);
 
-	mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
+	//mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
+	mp_obj_eigenmath_t *self = mp_obj_malloc(mp_obj_eigenmath_t, type);
 	self->base.type = type;
 
 	STACKSIZE  = mp_obj_get_int(args[0]);
@@ -1070,34 +1073,13 @@ static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
 
 
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
+	//{ MP_ROM_QSTR(MP_QSTR___init__), MP_ROM_PTR(&mp_identity_obj) },
+
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
-/*
-static const mp_obj_type_t eigenmath_type = {
-	{ &mp_type_type },
-	.name = MP_QSTR_EigenMath,
-	.make_new = eigenmath_make_new,
-	.locals_dict = (mp_obj_dict_t*)&eigenmath_locals_dict,
-	.unary_op = NULL,
-	.attr = NULL,
-	.buffer_p = NULL,
-	.protocol = NULL,
-	.parent = NULL,
-	.flags = 0,
-	.print = NULL,
-	.del = eigenmath_del, 
-};
 
-MP_DEFINE_CONST_OBJ_TYPE(
-    eigenmath_type,              
-    MP_QSTR_EigenMath,           
-    MP_TYPE_FLAG_NONE,           
-    make_new, eigenmath_make_new,
-    locals_dict, &eigenmath_locals_dict,  
-    del, eigenmath_del           
-);*/
 mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
         eigenmath_del(self_in);
@@ -1114,7 +1096,8 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
     locals_dict, &eigenmath_locals_dict,
-    attr, eigenmath_attr
+    attr, eigenmath_attr,
+	print, eigenmath_print
 );
 
 
