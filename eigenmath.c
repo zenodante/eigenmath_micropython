@@ -1009,11 +1009,20 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	gc();
 	if(stack) {
 		m_free(stack);
 		stack = NULL;
 	}
 	if(symtab) {
+		for (int i = 0; i < 27 * BUCKETSIZE; i++) {
+			if (symtab[i] == NULL) continue; // skip empty slots
+			if (symtab[i]->u.usym.name != NULL){
+				m_free(symtab[i]->u.usym.name); // free symbol name
+				//symtab[i]->u.usym.name = NULL; // set to NULL to avoid dangling pointer
+			}
+			//m_free(symtab[i]);
+		}
 		m_free(symtab);
 		symtab = NULL;
 	}
@@ -1691,7 +1700,7 @@ void
 mfree(uint32_t *u)
 {
 	m_free(u - 1);
-	gc_collect();
+	//gc_collect();
 	bignum_count--;
 }
 
