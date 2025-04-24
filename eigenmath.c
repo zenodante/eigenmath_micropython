@@ -378,7 +378,7 @@ char *strbuf = NULL;
 
 int tos; // top of stack
 struct atom *free_list;
-struct atom *zero;
+struct atom *zero=NULL;
 struct atom *one;
 struct atom *minusone;
 struct atom *imaginaryunit;
@@ -979,28 +979,30 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	//const char *str;
 	//size_t str_len;
 	GET_STR_DATA_LEN(input_str_obj, str, str_len);
+	//mp_printf(&mp_plat_print, "debug input str is %s",str); 
+	
 	char *cmdBuffer = (char *)m_malloc(str_len+1);
 	if (cmdBuffer == NULL) {
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate memory for command"));
     }
 	memcpy(cmdBuffer, str, str_len);
 	cmdBuffer[str_len] = '\0';
+	//mp_printf(&mp_plat_print, "debug input str is %s",cmdBuffer); 
+	
 	mp_obj_t result;
-	nlr_buf_t nlr;
-    if (nlr_push(&nlr) == 0) {
-		run(cmdBuffer);
-		if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
-            m_free(cmdBuffer);
-            mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
-        }
-		result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
-		m_free(cmdBuffer);
-		nlr_pop();
-	} else {
-		m_free(cmdBuffer);
-        nlr_jump(nlr.ret_val); //
-	}
+	
+
+	outbuf[0] = '\0';
+	run(cmdBuffer);
+	if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
+        m_free(cmdBuffer);
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
+    }
+	result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
+	m_free(cmdBuffer);
+
 	return result;
+
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
@@ -1039,6 +1041,8 @@ static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 		m_free(strbuf);
 		strbuf = NULL;
 	}
+
+	return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
@@ -1079,7 +1083,11 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
         dest[0] = MP_OBJ_FROM_PTR(&eigenmath_del_obj);
         dest[1] = self_in;
-    }
+    }else{
+		// For any other attribute, indicate that lookup should continue in the locals dict
+		dest[1] = MP_OBJ_SENTINEL;
+		return MP_OBJ_NULL;
+		}
 
     return MP_OBJ_NULL; 
 }
@@ -1095,9 +1103,9 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_EigenMath,
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
+    attr, eigenmath_attr,           // attr handler before locals_dict
     locals_dict, &eigenmath_locals_dict,
-	attr, eigenmath_attr,
-	print, eigenmath_print
+    print, eigenmath_print
 );
 
 
@@ -1138,7 +1146,7 @@ alloc_block(void)
 {
 	int i;
 	struct atom *p;
-
+	//mp_printf(&mp_plat_print, "debug in alloc_block"); 
 	if (block_count == MAXBLOCKS) {
 		tos = 0;
 		gc(); // prep for next run
@@ -8180,6 +8188,7 @@ const char * const integral_tab[] ={
 void
 eval_integral(struct atom *p1)
 {
+	mp_printf(&mp_plat_print, "integral: called");
 	int flag, i, n;
 	struct atom *X, *Y = NULL; // silence compiler
 
@@ -16936,7 +16945,8 @@ outbuf_puts(char *s)
 		outbuf_length = m;
 	}
 
-	strcpy(outbuf + outbuf_index, s);
+	//strcpy(outbuf + outbuf_index, s);
+	memcpy(outbuf + outbuf_index, s, len);
 	outbuf_index += len;
 }
 
@@ -17270,8 +17280,13 @@ run(char *buf)
 	nonstop = 0;
 
 	if (zero == NULL) {
+		//mp_printf(&mp_plat_print, "debug zero == NULL\n");
+		
 		init_symbol_table();
+		
+		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
 		push_bignum(MPLUS, mint(0), mint(1));
+		
 		zero = pop();
 		push_bignum(MPLUS, mint(1), mint(1));
 		one = pop();
@@ -17282,7 +17297,9 @@ run(char *buf)
 		push_rational(1, 2);
 		list(3);
 		imaginaryunit = pop();
+		//mp_printf(&mp_plat_print, "before init script\n");
 		run_init_script();
+		
 	}
 
 	run_buf(buf);
@@ -17355,7 +17372,7 @@ print_trace(int color)
 	printbuf(outbuf, color);
 }
 
-char *init_script =
+const char *init_script =
 "i = sqrt(-1)\n"
 "grad(f) = d(f,(x,y,z))\n"
 "cross(a,b) = (dot(a[2],b[3])-dot(a[3],b[2]),dot(a[3],b[1])-dot(a[1],b[3]),dot(a[1],b[2])-dot(a[2],b[1]))\n"
@@ -17371,7 +17388,8 @@ char *init_script =
 void
 run_init_script(void)
 {
-	run_buf(init_script);
+	mp_printf(&mp_plat_print, "%s", init_script); 
+	//run_buf((char *)init_script);
 }
 
 void
@@ -18165,15 +18183,20 @@ void
 push_string(char *s)
 {
 	struct atom *p;
+	char *ns;
 	p = alloc_str();
-	s = strdup(s);
-	if (s == NULL){
+	ns = m_malloc(strlen(s) + 1);
+	
+	//strcpy(ns, s);
+	memcpy(ns, s, strlen(s) + 1);
+	//s = strdup(s);
+	if (ns == NULL){
 		//exit(1);
-		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "in push_string string is NULL"); // red
 		longjmp(jmpbuf0, 1);
 	}
 		
-	p->u.str = s;
+	p->u.str = ns;
 	push(p);
 }
 
@@ -18197,7 +18220,7 @@ lookup(char *s)
 {
 	int i, k;
 	struct atom *p;
-
+	char *ns;
 	if (isupper((unsigned char)*s))
 		k = BUCKETSIZE * (*s - 'A');
 	else if (islower((unsigned char)*s))
@@ -18217,15 +18240,19 @@ lookup(char *s)
 		stopf("symbol table full");
 
 	p = alloc_atom();
-	s = strdup(s);
-	if (s == NULL){
+	ns = m_malloc(strlen(s) + 1);
+	
+	//strcpy(ns, s);
+	memcpy(ns, s, strlen(s) + 1);
+	//s = strdup(s);
+	if (ns == NULL){
 		//exit(1);
-		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "in lookup string is NULL"); // red
 		longjmp(jmpbuf0, 1);
 	}
 		
 	p->atomtype = USYM;
-	p->u.usym.name = s;
+	p->u.usym.name = ns;
 	p->u.usym.index = k + i;
 	symtab[k + i] = p;
 	usym_count++;
@@ -18248,7 +18275,7 @@ void
 set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
 {
 	if (!isusersymbol(p1))
-		stopf("symbol error");
+		stopf("set_symbol symbol error");
 	binding[p1->u.usym.index] = p2;
 	usrfunc[p1->u.usym.index] = p3;
 }
@@ -18258,7 +18285,7 @@ get_binding(struct atom *p1)
 {
 	struct atom *p2;
 	if (!isusersymbol(p1))
-		stopf("symbol error");
+		stopf("get binding symbol error");
 	p2 = binding[p1->u.usym.index];
 	if (p2 == NULL || p2 == symbol(NIL))
 		p2 = p1; // symbol binds to itself
@@ -18269,19 +18296,19 @@ struct atom *
 get_usrfunc(struct atom *p)
 {
 	if (!isusersymbol(p))
-		stopf("symbol error");
+		stopf("get usrfunc symbol error");
 	p = usrfunc[p->u.usym.index];
 	if (p == NULL)
 		p = symbol(NIL);
 	return p;
 }
 
-struct se {
-	char *str;
+typedef struct{
+	const char *str;
 	int index;
 	void (*func)(struct atom *);
-} stab[] = {
-
+} se; 
+const se stab[] = {
 	{ "abs",		ABS,		eval_abs		},
 	{ "adj",		ADJ,		eval_adj		},
 	{ "and",		AND,		eval_and		},
@@ -18292,9 +18319,7 @@ struct se {
 	{ "arctan",		ARCTAN,		eval_arctan		},
 	{ "arctanh",	ARCTANH,	eval_arctanh	},
 	{ "arg",		ARG,		eval_arg		},
-
 	{ "binding",	BINDING,	eval_binding	},
-
 	{ "C",			C_UPPER,	NULL			},
 	{ "c",			C_LOWER,	NULL			},
 	{ "ceiling",	CEILING,	eval_ceiling	},
@@ -18307,7 +18332,6 @@ struct se {
 	{ "contract",	CONTRACT,	eval_contract	},
 	{ "cos",		COS,		eval_cos		},
 	{ "cosh",		COSH,		eval_cosh		},
-
 	{ "D",			D_UPPER,	NULL			},
 	{ "d",			D_LOWER,	NULL			},
 	{ "defint",		DEFINT,		eval_defint		},
@@ -18318,7 +18342,6 @@ struct se {
 	{ "do",			DO,			eval_do			},
 	{ "dot",		DOT,		eval_inner		},
 	{ "draw",		DRAW,		eval_draw		},
-
 	{ "eigenvec",	EIGENVEC,	eval_eigenvec	},
 	{ "erf",		ERF,		eval_erf		},
 	{ "erfc",		ERFC,		eval_erfc		},
@@ -18332,16 +18355,13 @@ struct se {
 	{ "expsinh",	EXPSINH,	eval_expsinh	},
 	{ "exptan",		EXPTAN,		eval_exptan		},
 	{ "exptanh",	EXPTANH,	eval_exptanh	},
-
 	{ "factorial",	FACTORIAL,	eval_factorial	},
 	{ "float",		FLOATF,		eval_float		},
 	{ "floor",		FLOOR,		eval_floor		},
 	{ "for",		FOR,		eval_for		},
-
 	{ "H",			H_UPPER,	NULL			},
 	{ "h",			H_LOWER,	NULL			},
 	{ "hadamard",	HADAMARD,	eval_hadamard	},
-
 	{ "I",			I_UPPER,	NULL			},
 	{ "i",			I_LOWER,	NULL			},
 	{ "imag",		IMAG,		eval_imag		},
@@ -18349,30 +18369,23 @@ struct se {
 	{ "inner",		INNER,		eval_inner		},
 	{ "integral",	INTEGRAL,	eval_integral	},
 	{ "inv",		INV,		eval_inv		},
-
 	{ "J",			J_UPPER,	NULL			},
 	{ "j",			J_LOWER,	NULL			},
-
 	{ "kronecker",	KRONECKER,	eval_kronecker	},
-
 	{ "last",		LAST,		NULL			},
 	{ "log",		LOG,		eval_log		},
-
 	{ "mag",		MAG,		eval_mag		},
 	{ "minor",		MINOR,		eval_minor		},
 	{ "minormatrix",MINORMATRIX,eval_minormatrix},
 	{ "mod",		MOD,		eval_mod		},
-
 	{ "nil",		NIL,		eval_nil		},
 	{ "noexpand",	NOEXPAND,	eval_noexpand	},
 	{ "not",		NOT,		eval_not		},
 	{ "nroots",		NROOTS,		eval_nroots		},
 	{ "number",		NUMBER,		eval_number		},
 	{ "numerator",	NUMERATOR,	eval_numerator	},
-
 	{ "or",			OR,		eval_or				},
 	{ "outer",		OUTER,		eval_outer		},
-
 	{ "p",			P_LOWER,	NULL			},
 	{ "P",			P_UPPER,	NULL			},
 	{ "pi",			PI,		NULL				},
@@ -18380,11 +18393,9 @@ struct se {
 	{ "prefixform",	PREFIXFORM,	eval_prefixform	},
 	{ "print",		PRINT,		eval_print		},
 	{ "product",	PRODUCT,	eval_product	},
-
 	{ "Q",			Q_UPPER,	NULL			},
 	{ "q",			Q_LOWER,	NULL			},
 	{ "quote",		QUOTE,		eval_quote		},
-
 	{ "R",			R_UPPER,	NULL			},
 	{ "r",			R_LOWER,	NULL			},
 	{ "rank",		RANK,		eval_rank		},
@@ -18394,7 +18405,6 @@ struct se {
 	{ "roots",		ROOTS,		eval_roots		},
 	{ "rotate",		ROTATE,		eval_rotate		},
 	{ "run",		RUN,		eval_run		},
-
 	{ "S",			S_UPPER,	NULL			},
 	{ "s",			S_LOWER,	NULL			},
 	{ "sgn",		SGN,		eval_sgn		},
@@ -18405,7 +18415,6 @@ struct se {
 	{ "status",		STATUS,		eval_status		},
 	{ "stop",		STOP,		eval_stop		},
 	{ "sum",		SUM,		eval_sum		},
-
 	{ "T",			T_UPPER,	NULL			},
 	{ "t",			T_LOWER,	NULL			},
 	{ "tan",		TAN,		eval_tan		},
@@ -18420,27 +18429,20 @@ struct se {
 	{ "trace",		TRACE,		NULL			},
 	{ "transpose",	TRANSPOSE,	eval_transpose	},
 	{ "tty",		TTY,		NULL			},
-
 	{ "U",			U_UPPER,	NULL			},
 	{ "u",			U_LOWER,	NULL			},
 	{ "unit",		UNIT,		eval_unit		},
-
 	{ "V",			V_UPPER,	NULL			},
 	{ "v",			V_LOWER,	NULL			},
-
 	{ "W",			W_UPPER,	NULL			},
 	{ "w",			W_LOWER,	NULL			},
-
 	{ "X",			X_UPPER,	NULL			},
 	{ "x",			X_LOWER,	NULL			},
-
 	{ "Y",			Y_UPPER,	NULL			},
 	{ "y",			Y_LOWER,	NULL			},
-
 	{ "Z",			Z_UPPER,	NULL			},
 	{ "z",			Z_LOWER,	NULL			},
 	{ "zero",		ZERO,		eval_zero		},
-
 	{ "+",			ADD,		eval_add		},
 	{ "*",			MULTIPLY,	eval_multiply	},
 	{ "^",			POWER,		eval_power		},
@@ -18474,14 +18476,21 @@ init_symbol_table(void)
 		usrfunc[i] = NULL;
 	}
 
-	n = sizeof stab / sizeof (struct se);
-
+	n = sizeof (stab) / sizeof (se);
+	//mp_printf(&mp_plat_print, "n is %d", n); // 
 	for (i = 0; i < n; i++) {
 		p = alloc_atom();
-		s = strdup(stab[i].str);
+		//s = strdup(stab[i].str);
+		//mp_printf(&mp_plat_print, "%s\n", stab[i].str); //
+		//mp_printf(&mp_plat_print, "%d\n", strlen(stab[i].str) + 1); //
+		s = m_malloc(strlen(stab[i].str) + 1);
+	
+		//strcpy(s, stab[i].str);
+		memcpy(s, stab[i].str, strlen(stab[i].str) + 1);
+
 		if (s == NULL){
 			//exit(1);
-			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "string is NULL"); // red
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "debug in init_symbol_table string is NULL"); // red
 			longjmp(jmpbuf0, 1);
 		}
 			

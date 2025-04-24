@@ -64,7 +64,7 @@ static mp_obj_t eigenmath_del(mp_obj_t self_in) {
     
 }
 
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
 //static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
@@ -80,6 +80,10 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
         dest[0] = MP_OBJ_FROM_PTR(&eigenmath_del_obj);
         dest[1] = self_in;
+    }else{
+                // For any other attribute, indicate that lookup should continue in the locals dict
+        dest[1] = MP_OBJ_SENTINEL;
+        return MP_OBJ_NULL;
     }
 
     return MP_OBJ_NULL; 
@@ -97,9 +101,9 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_EigenMath,
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
+    attr, eigenmath_attr,           // attr handler before locals_dict
     locals_dict, &eigenmath_locals_dict,
-	attr, eigenmath_attr,
-	print, eigenmath_print
+    print, eigenmath_print
 );
 
 
