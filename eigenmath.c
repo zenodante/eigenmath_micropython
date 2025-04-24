@@ -41,10 +41,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "py/runtime.h"
 #include "py/objstr.h"
 #include "py/gc.h"
+
+#include "eigenmem.h" // 自定义内存管理
 //#define STACKSIZE 2048 // evaluation stack
 //#define BLOCKSIZE 512
 //#define MAXBLOCKS 20
-
+#define OUTBUFDEFAULTSIZE 1000
 #define STRBUFLEN 1000
 #define BUCKETSIZE 50
 #define MAXDIM 24
@@ -352,28 +354,21 @@ struct tensor {
 #define BLACK 0
 #define BLUE 1
 #define RED 2
-
+eigen_heap_t  *pHeap=NULL;
 uint32_t STACKSIZE = 2048; // evaluation stack
-uint32_t BLOCKSIZE = 512;
-uint32_t MAXBLOCKS = 20;
-
+//uint32_t BLOCKSIZE = 512;
+//uint32_t MAXBLOCKS = 20;
+uint32_t MAXATOMS = 20 * 512; // 10,240 atoms
 
 //#define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
 #define Trace mp_printf(&mp_plat_print, "[TRACE] %s:%d\n", __func__, __LINE__)
 //extern struct atom *mem[MAXBLOCKS]; // an array of pointers
-struct atom **mem = NULL;
-
-
-//extern struct atom *stack[STACKSIZE];
+struct atom *mem = NULL;
 struct atom **stack = NULL; // 
-//extern struct atom *symtab[27 * BUCKETSIZE];
 struct atom **symtab = NULL; // symbol table
-//extern struct atom *binding[27 * BUCKETSIZE];
 struct atom **binding = NULL;
-//extern struct atom *usrfunc[27 * BUCKETSIZE];
 struct atom **usrfunc = NULL;
 char *strbuf = NULL;
-//char *outbuf=NULL;
 
 
 int tos; // top of stack
@@ -408,9 +403,9 @@ char *outbuf;
 int outbuf_index;
 int outbuf_length;
 
-
+void init_block(struct atom *mem);
 struct atom * alloc_atom(void);
-void alloc_block(void);
+//void alloc_block(void);
 struct atom * alloc_vector(int nrow);
 struct atom * alloc_matrix(int nrow, int ncol);
 struct atom * alloc_tensor(int nelem);
@@ -932,14 +927,14 @@ void init_symbol_table(void);
 
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
-
+    eigen_heap_t  heap;
 } mp_obj_eigenmath_t;
 
 static void eigenmath_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     mp_printf(print, "<EigenMath instance>");
 }
 
-
+//2048,512,20
 static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	size_t n_args, size_t n_kw,
 	const mp_obj_t *args) {
@@ -951,24 +946,36 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 
 
 	STACKSIZE  = mp_obj_get_int(args[0]);
-	BLOCKSIZE  = mp_obj_get_int(args[1]);
-	MAXBLOCKS  = mp_obj_get_int(args[2]);
+	//BLOCKSIZE  = mp_obj_get_int(args[1]);
+	MAXATOMS = mp_obj_get_int(args[1]); // 512*20
+	//MAXBLOCKS  = mp_obj_get_int(args[2]);
 	uint32_t sizeOfpAtom = sizeof(struct atom *);	
-	//extern struct atom *stack[STACKSIZE];
-	//extern struct atom *symtab[27 * BUCKETSIZE];
-	//extern struct atom *binding[27 * BUCKETSIZE];
-	//extern struct atom *usrfunc[27 * BUCKETSIZE];
-	//mem = (struct atom **)(self->pBuff+shift); // an array of pointers	
-	stack = (struct atom **)m_malloc0(STACKSIZE * sizeOfpAtom);
-	symtab = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
-	binding = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
-	usrfunc = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
-	mem = (struct atom **)m_malloc0(MAXBLOCKS * sizeOfpAtom); // an array of pointers
 
-	strbuf = (char *)m_malloc0(STRBUFLEN);
-	outbuf =(char *)m_malloc0(1000); // init output buffer
-	outbuf_length = 1000;
+	if (eigen_heap_init(self->heap, 300000)!=0){
+		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
+		return MP_OBJ_NULL;
+	}; // initialize heap with 300000 bytes
+	pHeap = &self->heap; // set global heap pointer
+	stack = (struct atom **)em_alloc_perm(pHeap, STACKSIZE * sizeOfpAtom);
+	symtab = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	binding = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	usrfunc = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	mem = (struct atom *)em_alloc_perm(pheap, MAXATOMS*sizeof(struct atom)); // initialize memory blocks to NULL
+	//init_block(mem);//allocate all the memory blocks at once, this is more efficient than allocating them one by one
+	//mem = (struct atom **)em_alloc_perm(pHeap, MAXBLOCKS * sizeOfpAtom); // an array of pointers
+	strbuf = (char *)em_alloc_perm(pHeap, STRBUFLEN);
+	init_symbol_table();//we need to move the symbol table initialization here, because it uses the perm part of the heap
+
+	outbuf = (char *) em_alloc_tmp(pHeap, OUTBUFDEFAULTSIZE);
+	outbuf_length = OUTBUFDEFAULTSIZE;
 	outbuf_index = 0;
+	//outbuf_init();
+
+	init_block(mem);
+	init_symbol_table(); // initialize symbol table moved to init()
+
+	mp_printf(&mp_plat_print, "current perm top %d\n",(uint32_t)pHeap->perm_top);
+	eigenmath_reset(self);
 	return MP_OBJ_FROM_PTR(self);
 }
 
@@ -981,7 +988,8 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	GET_STR_DATA_LEN(input_str_obj, str, str_len);
 	//mp_printf(&mp_plat_print, "debug input str is %s",str); 
 	
-	char *cmdBuffer = (char *)m_malloc(str_len+1);
+	//char *cmdBuffer = (char *)m_malloc(str_len+1);
+	char *cmdBuffer = (char *)em_alloc_temp(pHeap, str_len+1); // allocate memory for command buffer
 	if (cmdBuffer == NULL) {
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate memory for command"));
     }
@@ -992,14 +1000,14 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	mp_obj_t result;
 	
 
-	outbuf[0] = '\0';
+	//outbuf[0] = '\0';
 	run(cmdBuffer);
 	if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
-        m_free(cmdBuffer);
+        //m_free(cmdBuffer);
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
     }
 	result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
-	m_free(cmdBuffer);
+	//m_free(cmdBuffer);
 
 	return result;
 
@@ -1008,55 +1016,37 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 
 static mp_obj_t eigenmath_del(mp_obj_t self_in) {
-	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	gc();
-	if(stack) {
-		m_free(stack);
-		stack = NULL;
-	}
-	if(symtab) {
-		for (int i = 0; i < 27 * BUCKETSIZE; i++) {
-			if (symtab[i] == NULL) continue; // skip empty slots
-			if (symtab[i]->u.usym.name != NULL){
-				m_free(symtab[i]->u.usym.name); // free symbol name
-				//symtab[i]->u.usym.name = NULL; // set to NULL to avoid dangling pointer
-			}
-			//m_free(symtab[i]);
-		}
-		m_free(symtab);
-		symtab = NULL;
-	}
-	if(binding) {
-		m_free(binding);
-		binding = NULL;
-	}
-	if(usrfunc) {
-		m_free(usrfunc);
-		usrfunc = NULL;
-	}
-	if(mem) {
-		for (int i = 0; i < block_count; i++) {
-			if (mem[i] == NULL) continue; // skip empty blocks
-			m_free(mem[i]);
-		}
-		m_free(mem);
-		mem = NULL;
-	}
-	if (outbuf) {
-		m_free(outbuf);
-		outbuf = NULL;
-	}
-	if (strbuf) {
-		m_free(strbuf);
-		strbuf = NULL;
-	}
-
+	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	eigen_heap_deinit(&self->heap); // deinitialize the hea
+	
 	return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
 
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
+	
+	em_begin_run(pHeap); // begin run on the heap
+		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
+	push_bignum(MPLUS, mint(0), mint(1));
+	outbuf_init();
+	zero = pop();
+	push_bignum(MPLUS, mint(1), mint(1));
+	one = pop();
+	push_bignum(MMINUS, mint(1), mint(1));
+	minusone = pop();
+	push_symbol(POWER);
+	push_integer(-1);
+	push_rational(1, 2);
+	list(3);
+	imaginaryunit = pop();
+		//mp_printf(&mp_plat_print, "before init script\n");
+	run_init_script();
+
+
+
+
+/*
 	for (int i = 0; i < block_count; i++) {
 		if (mem[i]) {
 			m_free(mem[i]);
@@ -1083,7 +1073,7 @@ static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 	one = NULL;
 	minusone = NULL;
 	imaginaryunit = NULL;
-
+*/
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
@@ -1137,9 +1127,15 @@ struct atom *
 alloc_atom(void)
 {
 	struct atom *p;
-
-	if (free_count == 0)
-		alloc_block();
+	if (free_count == 0) {
+		gc(); // gc first, then try to allocate again
+	}
+	if (free_count == 0){
+		tos = 0;
+		//gc(); // prep for next run
+		exitf("out of memory");
+	}
+		
 
 	p = free_list;
 	free_list = p->u.next;
@@ -1149,7 +1145,26 @@ alloc_atom(void)
 
 	return p;
 }
+void init_block(struct atom *mem){
+	struct atom *p;
 
+	//p = (struct atom *)em_alloc_perm(pheap, MAXBLOCKS*BLOCKSIZE*sizeof(struct atom)); // initialize memory blocks to NULL
+	p=mem;
+	for (int j = 0; j <MAXATOMS - 1; j++) {
+		mem[j].atomtype = FREEATOM;
+		mem[j].u.next = mem + j + 1;
+	}
+	mem[MAXATOMS - 1].atomtype = FREEATOM;
+	mem[MAXATOMS - 1].u.next = NULL;
+	free_list = mem;
+	free_count = MAXATOMS;
+	alloc_count = 0;
+ // return the first block pointer
+}
+
+
+
+/*
 void
 alloc_block(void)
 {
@@ -1177,7 +1192,7 @@ alloc_block(void)
 	free_list = p;
 	free_count = BLOCKSIZE;
 }
-
+*/
 struct atom *
 alloc_vector(int nrow)
 {
@@ -1228,7 +1243,8 @@ alloc_str(void)
 void *
 alloc_mem(int n)
 {
-	void *p = m_malloc0(n);
+	//void *p = m_malloc0(n);
+	void *p = em_alloc_tmp(pHeap, n); // allocate memory from the permanent heap
 	if (p == NULL){
 		//exit(1);
 		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
@@ -1316,8 +1332,8 @@ mstr(uint32_t *u)
 	n = 1000 * (n / 1000 + 1);
 
 	if (n > len) {
-		if (buf)
-			m_free(buf);
+		//if (buf)
+			//m_free(buf);
 		buf = alloc_mem(n);
 		len = n;
 	}
@@ -1699,7 +1715,7 @@ mnew(int n)
 void
 mfree(uint32_t *u)
 {
-	m_free(u - 1);
+	//m_free(u - 1);
 	//gc_collect();
 	bignum_count--;
 }
@@ -2170,7 +2186,7 @@ subst(void)
 void
 evalg(void)
 {
-	if (gc_level == eval_level && alloc_count > MAXBLOCKS * BLOCKSIZE / 10)
+	if (gc_level == eval_level && alloc_count > MAXATOMS / 10)
 		gc();
 	gc_level++;
 	evalf();
@@ -5253,10 +5269,10 @@ eval_eigenvec(struct atom *p1)
 			if (fabs(p1->u.tensor->elem[n * i + j]->u.d - p1->u.tensor->elem[n * j + i]->u.d) > 1e-10)
 				stopf("eigenvec");
 
-	if (D)
-		m_free(D);
-	if (Q)
-		m_free(Q);
+	//if (D)
+	//	m_free(D);
+	//if (Q)
+	//	m_free(Q);
 
 	D = alloc_mem(n * n * sizeof (double));
 	Q = alloc_mem(n * n * sizeof (double));
@@ -9917,10 +9933,10 @@ nroots(void)
 
 	n = tos - h; // number of coeffs on stack
 
-	if (cr)
-		m_free(cr);
-	if (ci)
-		m_free(ci);
+	//if (cr)
+	//	m_free(cr);
+	//if (ci)
+	//	m_free(ci);
 
 	cr = alloc_mem(n * sizeof (double));
 	ci = alloc_mem(n * sizeof (double));
@@ -12675,15 +12691,15 @@ read_file(char *filename)
 
 	n = (int) t;
 
-	buf = m_malloc0(n + 1);
-
+	//buf = m_malloc0(n + 1);
+	buf =em_alloc_tmp(pHeap, n+1);
 	if (buf == NULL) {
 		close(fd);
 		return NULL;
 	}
 
 	if (read(fd, buf, n) != n) {
-		m_free(buf);
+		//m_free(buf);
 		close(fd);
 		return NULL;
 	}
@@ -13559,8 +13575,6 @@ eval_status(struct atom *p1)
 
 	outbuf_init();
 
-	snprintf(strbuf, STRBUFLEN, "block_count %d (%lu%%)\n", block_count, 100 * block_count / MAXBLOCKS);
-	outbuf_puts(strbuf);
 
 	snprintf(strbuf, STRBUFLEN, "free_count %d\n", free_count);
 	outbuf_puts(strbuf);
@@ -15308,8 +15322,8 @@ fmt(void)
 	m = 1000 * (n / 1000 + 1); // round up
 
 	if (m > fmt_buf_len) {
-		if (fmt_buf)
-			m_free(fmt_buf);
+		//if (fmt_buf)
+		//	m_free(fmt_buf);
 		fmt_buf = alloc_mem(m);
 		fmt_buf_len = m;
 	}
@@ -16621,9 +16635,8 @@ gc(void)
 
 	// tag everything
 
-	for (i = 0; i < block_count; i++)
-		for (j = 0; j < BLOCKSIZE; j++)
-			mem[i][j].tag = 1;
+	for (i = 0; i < MAXATOMS; i++)
+		mem[i].tag = 1;
 
 	// untag what's used
 
@@ -16646,10 +16659,8 @@ gc(void)
 	free_list = NULL;
 	free_count = 0;
 
-	for (i = 0; i < block_count; i++)
-		for (j = 0; j < BLOCKSIZE; j++) {
-
-			p = mem[i] + j;
+	for (i = 0; i < MAXATOMS; i++)
+			p = mem[i];
 
 			if (p->tag == 0)
 				continue;
@@ -16658,11 +16669,11 @@ gc(void)
 
 			switch (p->atomtype) {
 			case KSYM:
-				m_free(p->u.ksym.name);
+				//m_free(p->u.ksym.name);
 				ksym_count--;
 				break;
 			case USYM:
-				m_free(p->u.usym.name);
+				//m_free(p->u.usym.name);
 				usym_count--;
 				break;
 			case RATIONAL:
@@ -16670,12 +16681,12 @@ gc(void)
 				mfree(p->u.q.b);
 				break;
 			case STR:
-				if (p->u.str)
-					m_free(p->u.str);
+				//if (p->u.str)
+					//m_free(p->u.str);
 				string_count--;
 				break;
 			case TENSOR:
-				m_free(p->u.tensor);
+				//m_free(p->u.tensor);
 				tensor_count--;
 				break;
 			default:
@@ -16687,7 +16698,7 @@ gc(void)
 
 			free_list = p;
 			free_count++;
-		}
+		
 }
 
 void
@@ -16749,7 +16760,7 @@ run_infile(char *infile)
 		//exit(1);
 	}
 	run(buf);
-	m_free(buf);
+	//m_free(buf);
 }
 
 
@@ -16911,10 +16922,11 @@ outbuf_init(void)
 }
 
 void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
-    void *new_ptr = m_malloc0(new_size);
+    //void *new_ptr = m_malloc0(new_size);
+	void *new_ptr=em_alloc_tmp(pHeap, new_size);
     if (!new_ptr) {
         // optional: raise error or return NULL
-		m_free(old_ptr); // free old pointer if realloc fails
+		//m_free(old_ptr); // free old pointer if realloc fails
         return NULL;
     }
 
@@ -16922,7 +16934,7 @@ void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
         // copy old data to new block
         size_t copy_size = old_size < new_size ? old_size : new_size;
         memcpy(new_ptr, old_ptr, copy_size);
-        m_free(old_ptr);
+        //m_free(old_ptr);
     }
 
     return new_ptr;
@@ -17279,7 +17291,11 @@ run(char *buf)
 {
 	if (setjmp(jmpbuf0))
 		return;
-
+	em_begin_run();
+	//alloc outbuf
+	outbuf = (char *) em_alloc_tmp(pHeap, OUTBUFDEFAULTSIZE);
+	outbuf_length = OUTBUFDEFAULTSIZE;
+	outbuf_index = 0;
 	tos = 0;
 	interrupt = 0;
 	eval_level = 0;
@@ -17287,11 +17303,11 @@ run(char *buf)
 	expanding = 1;
 	drawing = 0;
 	nonstop = 0;
-
+/*
 	if (zero == NULL) {
 		//mp_printf(&mp_plat_print, "debug zero == NULL\n");
 		
-		init_symbol_table();
+		init_symbol_table(); // initialize symbol table moved to init()
 		
 		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
 		push_bignum(MPLUS, mint(0), mint(1));
@@ -17310,7 +17326,7 @@ run(char *buf)
 		run_init_script();
 		
 	}
-
+*/
 	run_buf(buf);
 }
 
@@ -17923,8 +17939,8 @@ update_token_buf(char *a, char *b)
 	m = 1000 * (n / 1000 + 1); // m is a multiple of 1000
 
 	if (m > token_buf_len) {
-		if (token_buf)
-			m_free(token_buf);
+		//if (token_buf)
+			//m_free(token_buf);
 		token_buf = alloc_mem(m);
 		token_buf_len = m;
 	}
@@ -18194,7 +18210,8 @@ push_string(char *s)
 	struct atom *p;
 	char *ns;
 	p = alloc_str();
-	ns = m_malloc0(strlen(s) + 1);
+	//ns = m_malloc0(strlen(s) + 1);
+	ns = em_alloc_tmp(pHeap, strlen(s) + 1); // allocate memory for string
 	
 	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
@@ -18249,8 +18266,8 @@ lookup(char *s)
 		stopf("symbol table full");
 
 	p = alloc_atom();
-	ns = m_malloc0(strlen(s) + 1);
-	
+	//ns = m_malloc0(strlen(s) + 1);
+	ns=em_alloc_perm(pHeap, strlen(s) + 1); // allocate memory for string
 	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
 	//s = strdup(s);
@@ -18492,8 +18509,8 @@ init_symbol_table(void)
 		//s = strdup(stab[i].str);
 		//mp_printf(&mp_plat_print, "%s\n", stab[i].str); //
 		//mp_printf(&mp_plat_print, "%d\n", strlen(stab[i].str) + 1); //
-		s = m_malloc(strlen(stab[i].str) + 1);
-	
+		//s = m_malloc(strlen(stab[i].str) + 1);
+		s =em_alloc_perm(pheap,strlen(stab[i].str) + 1); // allocate memory for string
 		//strcpy(s, stab[i].str);
 		memcpy(s, stab[i].str, strlen(stab[i].str) + 1);
 
