@@ -959,14 +959,14 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	//extern struct atom *binding[27 * BUCKETSIZE];
 	//extern struct atom *usrfunc[27 * BUCKETSIZE];
 	//mem = (struct atom **)(self->pBuff+shift); // an array of pointers	
-	stack = (struct atom **)m_malloc(STACKSIZE * sizeOfpAtom);
-	symtab = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
-	binding = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
-	usrfunc = (struct atom **)m_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
-	mem = (struct atom **)m_malloc(MAXBLOCKS * sizeOfpAtom); // an array of pointers
+	stack = (struct atom **)m_malloc0(STACKSIZE * sizeOfpAtom);
+	symtab = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
+	binding = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
+	usrfunc = (struct atom **)m_malloc0((27 * BUCKETSIZE) * sizeOfpAtom);
+	mem = (struct atom **)m_malloc0(MAXBLOCKS * sizeOfpAtom); // an array of pointers
 
-	strbuf = (char *)m_malloc(STRBUFLEN);
-	outbuf =(char *)m_malloc(1000); // init output buffer
+	strbuf = (char *)m_malloc0(STRBUFLEN);
+	outbuf =(char *)m_malloc0(1000); // init output buffer
 	outbuf_length = 1000;
 	outbuf_index = 0;
 	return MP_OBJ_FROM_PTR(self);
@@ -1219,7 +1219,7 @@ alloc_str(void)
 void *
 alloc_mem(int n)
 {
-	void *p = m_malloc(n);
+	void *p = m_malloc0(n);
 	if (p == NULL){
 		//exit(1);
 		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
@@ -12666,7 +12666,7 @@ read_file(char *filename)
 
 	n = (int) t;
 
-	buf = m_malloc(n + 1);
+	buf = m_malloc0(n + 1);
 
 	if (buf == NULL) {
 		close(fd);
@@ -16902,7 +16902,7 @@ outbuf_init(void)
 }
 
 void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
-    void *new_ptr = m_malloc(new_size);
+    void *new_ptr = m_malloc0(new_size);
     if (!new_ptr) {
         // optional: raise error or return NULL
 		m_free(old_ptr); // free old pointer if realloc fails
@@ -18185,7 +18185,7 @@ push_string(char *s)
 	struct atom *p;
 	char *ns;
 	p = alloc_str();
-	ns = m_malloc(strlen(s) + 1);
+	ns = m_malloc0(strlen(s) + 1);
 	
 	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
@@ -18240,7 +18240,7 @@ lookup(char *s)
 		stopf("symbol table full");
 
 	p = alloc_atom();
-	ns = m_malloc(strlen(s) + 1);
+	ns = m_malloc0(strlen(s) + 1);
 	
 	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
@@ -18507,4 +18507,5 @@ init_symbol_table(void)
 		}
 		symtab[stab[i].index] = p;
 	}
+	//mp_printf(&mp_plat_print, "");
 }
