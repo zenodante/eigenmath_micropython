@@ -51,43 +51,67 @@
      return (((uintptr_t)ptr - (uintptr_t)heap_base) & ALIGN_MASK) == 0;
  }
  
- /* Insert and coalesce a free block (address-ordered) */
- static void insert_free(block_t *blk) {
-     if (!is_valid_block(blk) || IS_USED(blk)) {
-         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: invalid or used block"));
-         return;
-     }
- 
-     block_t *prev = &start_node;
-     /* find insertion point */
-     while (prev->next < blk && prev->next != end_node) {
-         prev = prev->next;
-         if (!is_valid_block(prev)) {
-             mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: corrupted free list"));
-             return;
-         }
-     }
- 
-     /* attempt forward merge */
-     if (prev->next != end_node &&
-         (uint8_t*)blk + BLOCK_SIZE(blk) == (uint8_t*)prev->next &&
-         !IS_USED(prev->next)) {
-         blk->size = (BLOCK_SIZE(blk) + BLOCK_SIZE(prev->next));
-         blk->next = prev->next->next;
-     } else {
-         blk->next = prev->next;
-     }
- 
-     /* attempt backward merge */
-     if (prev != &start_node &&
-         (uint8_t*)prev + BLOCK_SIZE(prev) == (uint8_t*)blk &&
-         !IS_USED(prev)) {
-         prev->size = (BLOCK_SIZE(prev) + BLOCK_SIZE(blk));
-         prev->next = blk->next;
-     } else {
-         prev->next = blk;
-     }
- }
+/* Insert and coalesce a free block (address-ordered), with overflow guards */  
+static void insert_free(block_t *blk) {  
+    if (!is_valid_block(blk) || IS_USED(blk)) {  
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: invalid or used block"));  
+        return;  
+    }  
+    size_t blk_sz = BLOCK_SIZE(blk);  
+    /* guard pointer addition overflow */  
+    if (blk_sz > (size_t)(heap_end - (uint8_t*)blk)) {  
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: block size overflow"));  
+        return;  
+    }  
+    uint8_t *blk_end = (uint8_t*)blk + blk_sz;  
+  
+    block_t *prev = &start_node;  
+    /* find insertion point */  
+    while (prev->next < blk && prev->next != end_node) {  
+        prev = prev->next;  
+        if (!is_valid_block(prev)) {  
+            mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: corrupted free list"));  
+            return;  
+        }  
+    }  
+  
+    /* forward merge */  
+    if (prev->next != end_node) {  
+        block_t *fwd = prev->next;  
+        if (!IS_USED(fwd) &&  
+            (uint8_t*)fwd == blk_end) {  
+            /* fuse sizes */  
+            size_t total = blk_sz + BLOCK_SIZE(fwd);  
+            if (total < blk_sz) { /* overflow? */  
+                mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: combine overflow"));  
+                return;  
+            }  
+            blk->size = total;  
+            blk->next = fwd->next;  
+            blk_sz = total;  /* update for potential backward merge */  
+        } else {  
+            blk->next = fwd;  
+        }  
+    } else {  
+        blk->next = end_node;  
+    }  
+  
+    /* backward merge */  
+    if (prev != &start_node && !IS_USED(prev)) {  
+        uint8_t *prev_end = (uint8_t*)prev + BLOCK_SIZE(prev);  
+        if (prev_end == (uint8_t*)blk) {  
+            size_t total = BLOCK_SIZE(prev) + blk_sz;  
+            if (total < BLOCK_SIZE(prev)) { /* overflow? */  
+                mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("insert_free: combine overflow"));  
+                return;  
+            }  
+            prev->size = total;  
+            prev->next = blk->next;  
+            return;  
+        }  
+    }  
+    prev->next = blk;  
+}  
  
  static void heap_init_once(void) {
      if (initialized) return;
