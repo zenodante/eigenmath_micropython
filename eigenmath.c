@@ -15435,11 +15435,11 @@ fmt_function(struct atom *p)
 
 	// default
 
-	if (issymbol(car(p)))
+	if (issymbol(car(p))){
 		fmt_symbol(car(p));
-	else
+	}else{
 		fmt_subexpr(car(p));
-
+	}
 	fmt_args(p);
 }
 
@@ -15493,16 +15493,18 @@ fmt_matrix(struct atom *p, int d, int k)
 
 	span = 1;
 
-	for (i = d + 2; i < p->u.tensor->ndim; i++)
+	for (i = d + 2; i < p->u.tensor->ndim; i++){
 		span *= p->u.tensor->dim[i];
+	}
 
 	n = p->u.tensor->dim[d];	// number of rows
 	m = p->u.tensor->dim[d + 1];	// number of columns
 
-	for (i = 0; i < n; i++)
-		for (j = 0; j < m; j++)
+	for (i = 0; i < n; i++){
+		for (j = 0; j < m; j++){
 			fmt_matrix(p, d + 2, k + (i * m + j) * span);
-
+		}
+	}
 	fmt_update_table(n, m);
 }
 
@@ -15522,11 +15524,13 @@ fmt_numerators(struct atom *p)
 		q = car(p);
 		p = cdr(p);
 
-		if (!isnumerator(q))
+		if (!isnumerator(q)){
 			continue;
+		}
 
-		if (tos > t)
+		if (tos > t){
 			fmt_space();
+		}
 
 		if (isrational(q)) {
 			s = mstr(q->u.q.a);
@@ -15534,15 +15538,16 @@ fmt_numerators(struct atom *p)
 			continue;
 		}
 
-		if (car(q) == symbol(ADD) && n == 1)
+		if (car(q) == symbol(ADD) && n == 1){
 			fmt_expr(q); // parens not needed
-		else
+		}else{
 			fmt_factor(q);
+		}
 	}
 
-	if (t == tos)
+	if (t == tos){
 		fmt_roman_char('1'); // no numerators
-
+	}
 	fmt_update_list(t);
 }
 
@@ -15645,9 +15650,9 @@ fmt_reciprocal(struct atom *p)
 
 	t = tos;
 
-	if (isminusone(caddr(p)))
+	if (isminusone(caddr(p))){
 		fmt_expr(cadr(p));
-	else {
+	}else {
 		fmt_base(cadr(p));
 		fmt_numeric_exponent(caddr(p)); // sign is not emitted
 	}
@@ -15678,8 +15683,9 @@ fmt_roman_char(int c)
 void
 fmt_roman_string(char *s)
 {
-	while (*s)
+	while (*s){
 		fmt_roman_char(*s++);
+	}
 }
 
 void
@@ -15726,8 +15732,9 @@ fmt_symbol(struct atom *p)
 
 	k = fmt_symbol_fragment(s, 0);
 
-	if (s[k] == '\0')
+	if (s[k] == '\0'){
 		return;
+	}
 
 	// emit subscript
 
@@ -15735,8 +15742,9 @@ fmt_symbol(struct atom *p)
 
 	t = tos;
 
-	while (s[k] != '\0')
+	while (s[k] != '\0'){
 		k = fmt_symbol_fragment(s, k);
+	}
 
 	fmt_update_list(t);
 
@@ -15866,8 +15874,9 @@ fmt_symbol_fragment(char *s, int k)
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
 		t = (char)symbol_name_tab[i];
 		n = (int) strlen((const char *)t);
-		if (strncmp(s + k, t, n) == 0)
+		if (strncmp(s + k, t, n) == 0){
 			break;
+		}
 	}
 
 	if (i == NUM_SYMBOL_NAMES) {
@@ -15929,19 +15938,21 @@ fmt_table(int x, int y, struct atom *p)
 void
 fmt_tensor(struct atom *p)
 {
-	if (p->u.tensor->ndim % 2 == 1)
+	if (p->u.tensor->ndim % 2 == 1){
 		fmt_vector(p); // odd rank
-	else
+	}else{
 		fmt_matrix(p, 0, 0); // even rank
+	}
 }
 
 void
 fmt_term(struct atom *p)
 {
-	if (car(p) == symbol(MULTIPLY))
+	if (car(p) == symbol(MULTIPLY)){
 		fmt_term_nib(p);
-	else
+	}else{
 		fmt_factor(p);
+	}
 }
 
 void
@@ -15956,8 +15967,9 @@ fmt_term_nib(struct atom *p)
 
 	p = cdr(p);
 
-	if (isminusone(car(p)))
+	if (isminusone(car(p))){
 		p = cdr(p); // sign already emitted
+	}
 
 	fmt_factor(car(p));
 
@@ -16002,8 +16014,9 @@ fmt_update_list(int t)
 	int d, h, i, w;
 	struct atom *p1;
 
-	if (tos - t == 1)
+	if (tos - t == 1){
 		return;
+	}
 
 	h = 0;
 	d = 0;
@@ -16222,13 +16235,15 @@ fmt_vector(struct atom *p)
 
 	n = p->u.tensor->ndim;
 
-	for (i = 1; i < n; i++)
+	for (i = 1; i < n; i++){
 		span *= p->u.tensor->dim[i];
+	}
 
 	n = p->u.tensor->dim[0]; // number of rows
 
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n; i++){
 		fmt_matrix(p, 1, i * span);
+	}
 
 	fmt_update_table(n, 1); // n rows, 1 column
 }
@@ -16282,8 +16297,9 @@ fmt_draw(int x, int y, struct atom *p)
 
 		fmt_draw_char(x, y, BDLR);
 
-		for (i = 1; i < w - 1; i++)
+		for (i = 1; i < w - 1; i++){
 			fmt_draw_char(x + i, y, BDLH);
+		}
 
 		fmt_draw_char(x + w - 1, y, BDLL);
 
@@ -16312,8 +16328,9 @@ fmt_draw(int x, int y, struct atom *p)
 void
 fmt_draw_char(int x, int y, int c)
 {
-	if (x >= 0 && x < fmt_ncol && y >= 0 && y < fmt_nrow)
+	if (x >= 0 && x < fmt_ncol && y >= 0 && y < fmt_nrow){
 		fmt_buf[y * fmt_ncol + x] = c;
+	}
 }
 
 void
@@ -16335,8 +16352,9 @@ fmt_draw_ldelim(int x, int y, int h, int d)
 
 	fmt_draw_char(x, y - h + 1, BDLDAR);
 
-	for (i = 1; i < h + d - 1; i++)
+	for (i = 1; i < h + d - 1; i++){
 		fmt_draw_char(x, y - h + 1 + i, BDLV);
+	}
 
 	fmt_draw_char(x, y + d, BDLUAR);
 }
@@ -16348,8 +16366,9 @@ fmt_draw_rdelim(int x, int y, int h, int d)
 
 	fmt_draw_char(x, y - h + 1, BDLDAL);
 
-	for (i = 1; i < h + d - 1; i++)
+	for (i = 1; i < h + d - 1; i++){
 		fmt_draw_char(x, y - h + 1 + i, BDLV);
+	}
 
 	fmt_draw_char(x, y + d, BDLUAL);
 }
@@ -16403,16 +16422,19 @@ void
 fmt_putw(uint32_t w)
 {
 	uint8_t buf[4];
-	if (w == 0)
+	if (w == 0){
 		w = ' ';
+	}
 	buf[0] = w >> 24;
 	buf[1] = w >> 16;
 	buf[2] = w >> 8;
 	buf[3] = w;
-	if (buf[1])
+	if (buf[1]){
 		outbuf_putc(buf[1]);
-	if (buf[2])
+	}
+	if (buf[2]){
 		outbuf_putc(buf[2]);
+	}
 	outbuf_putc(buf[3]);
 }
 // automatic variables not visible to the garbage collector are reclaimed
@@ -16428,8 +16450,9 @@ gc(void)
 
 	// tag everything
 
-	for (i = 0; i < MAXATOMS;i++)
+	for (i = 0; i < MAXATOMS;i++){
 		mem[i].tag = 1;
+	}
 
 	// untag what's used
 
@@ -16438,8 +16461,9 @@ gc(void)
 	untag(minusone);
 	untag(imaginaryunit);
 
-	for (i = 0; i < tos; i++)
+	for (i = 0; i < tos; i++){
 		untag(stack[i]);
+	}
 
 	for (i = 0; i < 27 * BUCKETSIZE; i++) {
 		untag(symtab[i]);
@@ -16455,33 +16479,34 @@ gc(void)
 	for (i = 0; i < MAXATOMS;i++){
 
 		p = mem[i];
-		if (p->tag == 0)
+		if (p->tag == 0){
 			continue;
+		}
 		// still tagged so it's unused, put on free list
 		switch (p->atomtype) {
-		case KSYM:
-			e_free(p->u.ksym.name);
-			ksym_count--;
-			break;
-		case USYM:
-			e_free(p->u.usym.name);
-			usym_count--;
-			break;
-		case RATIONAL:
-			mfree(p->u.q.a);
-			mfree(p->u.q.b);
-			break;
-		case STR:
-			if (p->u.str)
-				e_free(p->u.str);
-			string_count--;
-			break;
-		case TENSOR:
-			e_free(p->u.tensor);
-			tensor_count--;
-			break;
-		default:
-			break; // FREEATOM, CONS, or DOUBLE
+			case KSYM:
+				e_free(p->u.ksym.name);
+				ksym_count--;
+				break;
+			case USYM:
+				e_free(p->u.usym.name);
+				usym_count--;
+				break;
+			case RATIONAL:
+				mfree(p->u.q.a);
+				mfree(p->u.q.b);
+				break;
+			case STR:
+				if (p->u.str)
+					e_free(p->u.str);
+				string_count--;
+				break;
+			case TENSOR:
+				e_free(p->u.tensor);
+				tensor_count--;
+				break;
+			default:
+				break; // FREEATOM, CONS, or DOUBLE
 		}
 		p->atomtype = FREEATOM;
 		p->u.next = free_list;
@@ -16495,25 +16520,30 @@ untag(struct atom *p)
 {
 	int i;
 
-	if (p == NULL)
+	if (p == NULL){
 		return;
+	}
 
 	while (iscons(p)) {
-		if (p->tag == 0)
+		if (p->tag == 0){
 			return;
+		}
 		p->tag = 0;
 		untag(p->u.cons.car);
 		p = p->u.cons.cdr;
 	}
 
-	if (p->tag == 0)
+	if (p->tag == 0){
 		return;
+	}
 
 	p->tag = 0;
 
-	if (istensor(p))
-		for (i = 0; i < p->u.tensor->nelem; i++)
+	if (istensor(p)){
+		for (i = 0; i < p->u.tensor->nelem; i++){
 			untag(p->u.tensor->elem[i]);
+		}
+	}
 }
 struct atom *mem; // an array of pointers
 struct atom *free_list;
@@ -16666,8 +16696,9 @@ numden_find_divisor(struct atom *p)
 	if (car(p) == symbol(ADD)) {
 		p = cdr(p);
 		while (iscons(p)) {
-			if (numden_find_divisor_term(car(p)))
+			if (numden_find_divisor_term(car(p))){
 				return 1;
+			}
 			p = cdr(p);
 		}
 		return 0;
@@ -16682,8 +16713,9 @@ numden_find_divisor_term(struct atom *p)
 	if (car(p) == symbol(MULTIPLY)) {
 		p = cdr(p);
 		while (iscons(p)) {
-			if (numden_find_divisor_factor(car(p)))
+			if (numden_find_divisor_factor(car(p))){
 				return 1;
+			}
 			p = cdr(p);
 		}
 		return 0;
@@ -16701,9 +16733,9 @@ numden_find_divisor_factor(struct atom *p)
 	}
 
 	if (car(p) == symbol(POWER) && isnegativeterm(caddr(p))) {
-		if (isminusone(caddr(p)))
+		if (isminusone(caddr(p))){
 			push(cadr(p));
-		else {
+		}else {
 			push_symbol(POWER);
 			push(cadr(p));
 			push(caddr(p));
@@ -16766,8 +16798,9 @@ outbuf_puts(char *s)
 
 	if (m > outbuf_length) {
 		outbuf = e_realloc(outbuf, m);
-		if (outbuf == NULL)
+		if (outbuf == NULL){
 			stopf("outbuf_puts: realloc failed");
+		}
 		outbuf_length = m;
 	}
 
@@ -16789,9 +16822,10 @@ outbuf_putc(int c)
 
 	if (m > outbuf_length) {
 		outbuf = e_realloc(outbuf, m);
-		if (outbuf == NULL)
+		if (outbuf == NULL){
 			//exit(1);
 			stopf("outbuf_putc: realloc failed");
+		}
 		outbuf_length = m;
 	}
 
@@ -16802,14 +16836,18 @@ int
 iszero(struct atom *p)
 {
 	int i;
-	if (isrational(p))
+	if (isrational(p)){
 		return MZERO(p->u.q.a);
-	if (isdouble(p))
+	}
+	if (isdouble(p)){
 		return p->u.d == 0.0;
+	}
 	if (istensor(p)) {
-		for (i = 0; i < p->u.tensor->nelem; i++)
-			if (!iszero(p->u.tensor->elem[i]))
+		for (i = 0; i < p->u.tensor->nelem; i++){
+			if (!iszero(p->u.tensor->elem[i])){
 				return 0;
+			}
+		}
 		return 1;
 	}
 	return 0;
@@ -16829,12 +16867,14 @@ isequalq(struct atom *p, int a, int b)
 		if (a < 0) {
 			sign = MMINUS;
 			a = -a;
-		} else
+		} else{
 			sign = MPLUS;
+		}
 		return p->sign == sign && MEQUAL(p->u.q.a, a) && MEQUAL(p->u.q.b, b);
 	}
-	if (isdouble(p))
+	if (isdouble(p)){
 		return p->u.d == (double) a / b;
+	}
 	return 0;
 }
 
@@ -16889,12 +16929,13 @@ isnegativeterm(struct atom *p)
 int
 isnegativenumber(struct atom *p)
 {
-	if (isrational(p))
+	if (isrational(p)){
 		return p->sign == MMINUS;
-	else if (isdouble(p))
+	}else if (isdouble(p)){
 		return p->u.d < 0.0;
-	else
+	}else{
 		return 0;
+	}
 }
 
 int
