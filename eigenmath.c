@@ -411,6 +411,7 @@ struct atom * alloc_matrix(int nrow, int ncol);
 struct atom * alloc_tensor(int nelem);
 struct atom * alloc_str(void);
 void * alloc_mem(int n);
+void * alloc_mem_temp(int n);
 double mfloat(uint32_t *p);
 void msetbit(uint32_t *x, uint32_t k);
 void mclrbit(uint32_t *x, uint32_t k);
@@ -917,13 +918,16 @@ void push_string(char *s);
 void slice(int h, int n);
 struct atom * lookup(char *s);
 char * printname(struct atom *p);
-void set_symbol(struct atom *p1, struct atom *p2, struct atom *p3);
+//void set_symbol(struct atom *p1, struct atom *p2, struct atom *p3);
+void set_symbol(struct atom *sym, struct atom *value, struct atom *attr);
 struct atom * get_binding(struct atom *p1);
 struct atom * get_usrfunc(struct atom *p);
 void init_symbol_table(void);
+static inline bool in_tmp(void *ptr);
 
-
-
+static inline bool in_tmp(void *ptr) {
+    return ((uint8_t *)ptr >= pHeap->arena + pHeap->tmp_top);
+}
 
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
@@ -1239,12 +1243,24 @@ alloc_str(void)
 	string_count++;
 	return p;
 }
-
+void *
+alloc_mem_temp(int n)
+{
+	//void *p = m_malloc0(n);
+	void *p = em_alloc_tmp(pHeap, n); // allocate memory from the permanent heap
+	if (p == NULL){
+		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
+		longjmp(jmpbuf0, 1);
+	}
+		
+	return p;
+}
 void *
 alloc_mem(int n)
 {
 	//void *p = m_malloc0(n);
-	void *p = em_alloc_tmp(pHeap, n); // allocate memory from the permanent heap
+	void *p = em_alloc_perm(pHeap, n); // allocate memory from the permanent heap
 	if (p == NULL){
 		//exit(1);
 		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
@@ -5274,8 +5290,8 @@ eval_eigenvec(struct atom *p1)
 	//if (Q)
 	//	m_free(Q);
 
-	D = alloc_mem(n * n * sizeof (double));
-	Q = alloc_mem(n * n * sizeof (double));
+	D = alloc_mem_temp(n * n * sizeof (double));
+	Q = alloc_mem_temp(n * n * sizeof (double));
 
 	// initialize D
 
@@ -9938,8 +9954,8 @@ nroots(void)
 	//if (ci)
 	//	m_free(ci);
 
-	cr = alloc_mem(n * sizeof (double));
-	ci = alloc_mem(n * sizeof (double));
+	cr = alloc_mem_temp(n * sizeof (double));
+	ci = alloc_mem_temp(n * sizeof (double));
 
 	// convert coeffs to floating point
 
@@ -15324,7 +15340,7 @@ fmt(void)
 	if (m > fmt_buf_len) {
 		//if (fmt_buf)
 		//	m_free(fmt_buf);
-		fmt_buf = alloc_mem(m);
+		fmt_buf = alloc_mem_temp(m);
 		fmt_buf_len = m;
 	}
 
@@ -17941,7 +17957,7 @@ update_token_buf(char *a, char *b)
 	if (m > token_buf_len) {
 		//if (token_buf)
 			//m_free(token_buf);
-		token_buf = alloc_mem(m);
+		token_buf = alloc_mem_temp(m);
 		token_buf_len = m;
 	}
 
@@ -18298,12 +18314,38 @@ printname(struct atom *p)
 }
 
 void
-set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
-{
+//set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
+void set_symbol(struct atom *sym, struct atom *value, struct atom *attr){
+	if (!isusersymbol(sym))
+        stopf("set_symbol symbol error");
+
+    /* ---------- upgrade string buffer ---------- */
+    if (isstr(value) && value->u.str && in_tmp(value->u.str)) {
+        size_t len = strlen(value->u.str) + 1;
+        char *perm_buf = em_alloc_perm(&eigen_heap, len);
+        memcpy(perm_buf, value->u.str, len);
+        value->u.str = perm_buf;
+    }
+
+    /* ---------- upgrade tensor buffer ---------- */
+    if (istensor(value) && value->u.tensor && in_tmp(value->u.tensor)) {
+        size_t bytes = tensor_bytes(value);      /* helper: returns byte size */
+        void *perm_buf = em_alloc_perm(&eigen_heap, bytes);
+        memcpy(perm_buf, value->u.tensor, bytes);
+        value->u.tensor = perm_buf;
+    }
+
+    /*  Add similar blocks for other object types with tmp‑allocated payload */
+
+    /* ---------- bind symbol ---------- */
+    binding[sym->u.usym.index]  = value;
+    usrfunc[sym->u.usym.index]  = attr;
+	/*
 	if (!isusersymbol(p1))
 		stopf("set_symbol symbol error");
 	binding[p1->u.usym.index] = p2;
 	usrfunc[p1->u.usym.index] = p3;
+	*/
 }
 
 struct atom *
