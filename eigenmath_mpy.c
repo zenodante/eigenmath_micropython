@@ -36,10 +36,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	
 	self->base.type = type;
     self->heapSize = mp_obj_get_int(args[0]); // 350 * 1024; // 350KB
-    
-	//STACKSIZE  = mp_obj_get_int(args[1]);
-	//MAXATOMS = mp_obj_get_int(args[2]); // 512*20
-	//uint32_t sizeOfpAtom = sizeof(struct atom *);	
+
     self->pHeap = m_malloc(self->heapSize);
 	if (self->pHeap == NULL){
 		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
