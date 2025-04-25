@@ -579,9 +579,7 @@ void eval_index(struct atom *p1);
 void indexfunc(struct atom *T, int h);
 void eval_infixform(struct atom *p1);
 void print_infixform(struct atom *p);
-void print_pythonform(struct atom *p);
 void infixform_subexpr(struct atom *p);
-void pythonform_expr(struct atom *p, int parent_prec);
 void infixform_expr(struct atom *p);
 void infixform_expr_nib(struct atom *p);
 void infixform_term(struct atom *p);
@@ -6418,161 +6416,6 @@ eval_infixform(struct atom *p1)
 }
 
 // for tty mode and debugging
-void
-print_pythonform(struct atom *p)
-{
-    outbuf_init();                      
-    pythonform_expr(p, 0);               
-    outbuf_puts("\n");                   
-    printbuf(outbuf, BLACK);             
-}
-#define PREC_ADD      10
-#define PREC_MULTIPLY 20
-#define PREC_POWER    30
-#define PREC_ATOM     40
-#define PY_ADD_OP   " + "
-#define PY_SUB_OP   " - "
-#define PY_MUL_OP   " * "
-#define PY_POW_OP   "**"
-
-static void pythonform_expr(struct atom *p, int parent_prec) {
-    int my_prec = PREC_ATOM;
-
-    // 有理数（分数）
-    if (isrational(p)) {
-        struct atom *num = numerator(p);
-        struct atom *den = denominator(p);
-        // 分母为 1 时退化为整数
-        if (isint(den) && den->u.q.a[0] == 1) {
-            pythonform_expr(num, parent_prec);
-        } else {
-            pythonform_expr(num, PREC_ATOM);
-            outbuf_putc('/');
-            pythonform_expr(den, PREC_ATOM);
-        }
-        return;
-    }
-
-    // 复数
-    if (iscomplex(p)) {
-        struct atom *re = realpart(p);
-        struct atom *im = imagpart(p);
-        // 打印实部（可能为 0，也打印）
-        pythonform_expr(re, PREC_ADD);
-
-        // 虚部符号
-        bool im_neg = false;
-        if ((isdouble(im) && im->u.d < 0) || (isinteger(im) && im->u.q.a[0] < 0)) {
-            im_neg = true;
-        }
-        outbuf_puts(im_neg ? PY_SUB_OP : PY_ADD_OP);
-
-        // 打印绝对值虚部
-        if (im_neg) {
-            // 若接口不存在，可临时取绝对值
-            if (isdouble(im)) im->u.d = -im->u.d;
-            else if (isinteger(im)) im->u.q.a[0] = -im->u.q.a[0];
-        }
-        pythonform_expr(im, PREC_ATOM);
-        // Python 虚数单位
-        outbuf_putc('j');
-        return;
-    }
-
-    // 列表（操作符）处理
-    if (iscons(p)) {
-        struct atom *op = car(p);
-
-        // 加法与减法
-        if (op == symbol(ADD)) {
-            my_prec = PREC_ADD;
-            if (my_prec < parent_prec) outbuf_putc('(');
-            // 首项
-            pythonform_expr(cadr(p), my_prec);
-            // 其余项
-            struct atom *rest = cddr(p);
-            while (iscons(rest)) {
-                struct atom *term = car(rest);
-                if (isinteger(term) && term->u.q.a[0] < 0) {
-                    outbuf_puts(PY_SUB_OP);
-                    term->u.q.a[0] = -term->u.q.a[0];
-                    pythonform_expr(term, my_prec);
-                } else {
-                    outbuf_puts(PY_ADD_OP);
-                    pythonform_expr(term, my_prec);
-                }
-                rest = cdr(rest);
-            }
-            if (my_prec < parent_prec) outbuf_putc(')');
-            return;
-        }
-
-        // 乘法
-        if (op == symbol(MULTIPLY)) {
-            my_prec = PREC_MULTIPLY;
-            if (my_prec < parent_prec) outbuf_putc('(');
-            pythonform_expr(cadr(p), my_prec);
-            struct atom *rest = cddr(p);
-            while (iscons(rest)) {
-                outbuf_puts(PY_MUL_OP);
-                pythonform_expr(car(rest), my_prec);
-                rest = cdr(rest);
-            }
-            if (my_prec < parent_prec) outbuf_putc(')');
-            return;
-        }
-
-        // 幂运算
-        if (op == symbol(POWER)) {
-            my_prec = PREC_POWER;
-            if (my_prec < parent_prec) outbuf_putc('(');
-            pythonform_expr(cadr(p), my_prec);
-            outbuf_puts(PY_POW_OP);
-            pythonform_expr(caddr(p), my_prec + 1);
-            if (my_prec < parent_prec) outbuf_putc(')');
-            return;
-        }
-
-        // 其它函数调用
-        outbuf_puts(printname(op));
-        outbuf_putc('(');
-        struct atom *arg = cdr(p);
-        bool first = true;
-        while (iscons(arg)) {
-            if (!first) outbuf_puts(", ");
-            pythonform_expr(car(arg), 0);
-            first = false;
-            arg = cdr(arg);
-        }
-        outbuf_putc(')');
-        return;
-    }
-
-    // 双精度
-    if (isdouble(p)) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%.8g", p->u.d);
-        outbuf_puts(buf);
-        return;
-    }
-
-    // 整数
-    if (isinteger(p)) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%d", p->u.q.a[0]);
-        outbuf_puts(buf);
-        return;
-    }
-
-    // 用户符号
-    if (isusersymbol(p)) {
-        outbuf_puts(printname(p));
-        return;
-    }
-
-    // 兜底
-    outbuf_puts("<?> (unsupported)");
-}
 
 void
 print_infixform(struct atom *p)
@@ -11623,8 +11466,9 @@ prefixform(struct atom *p)
 	case DOUBLE:
 		snprintf(strbuf, STRBUFLEN, "%g", p->u.d);
 		outbuf_puts(strbuf);
-		if (!strchr(strbuf, '.') && !strchr(strbuf, 'e'))
+		if (!strchr(strbuf, '.') && !strchr(strbuf, 'e')){
 			outbuf_puts(".0");
+		}
 		break;
 	case KSYM:
 	case USYM:
@@ -11676,14 +11520,10 @@ print_result(void)
 	if (p1 == symbol(TTY) || iszero(p1)) {
 		push(p2);
 		display();
-	} else if (isnum(p1) && get_integer_value(p1) == 1) {
+	} else{
 		print_infixform(p2);
-	} else if (isnum(p1) && get_integer_value(p1) == 2) {
-		print_pythonform(p2);
-	} else {
-		push(p2);
-		display(); // fallback
 	}
+		
 }
 
 // returns 1 if result should be annotated
@@ -17060,13 +16900,15 @@ isnegativenumber(struct atom *p)
 int
 isimaginaryterm(struct atom *p)
 {
-	if (isimaginaryfactor(p))
+	if (isimaginaryfactor(p)){
 		return 1;
+	}
 	if (car(p) == symbol(MULTIPLY)) {
 		p = cdr(p);
 		while (iscons(p)) {
-			if (isimaginaryfactor(car(p)))
+			if (isimaginaryfactor(car(p))){
 				return 1;
+			}
 			p = cdr(p);
 		}
 	}
@@ -17116,34 +16958,41 @@ isdoublez(struct atom *p)
 {
 	if (car(p) == symbol(ADD)) {
 
-		if (lengthf(p) != 3)
+		if (lengthf(p) != 3){
 			return 0;
+		}
 
-		if (!isdouble(cadr(p))) // x
+		if (!isdouble(cadr(p))) {// x
 			return 0;
+		}
 
 		p = caddr(p);
 	}
 
-	if (car(p) != symbol(MULTIPLY))
+	if (car(p) != symbol(MULTIPLY)){
 		return 0;
+	}
 
-	if (lengthf(p) != 3)
+	if (lengthf(p) != 3){
 		return 0;
+	}
 
-	if (!isdouble(cadr(p))) // y
+	if (!isdouble(cadr(p))) {// y
 		return 0;
-
+	}
 	p = caddr(p);
 
-	if (car(p) != symbol(POWER))
+	if (car(p) != symbol(POWER)){
 		return 0;
+	}	
 
-	if (!isminusone(cadr(p)))
+	if (!isminusone(cadr(p))){
 		return 0;
+	}
 
-	if (!isequalq(caddr(p), 1, 2))
+	if (!isequalq(caddr(p), 1, 2)){
 		return 0;
+	}
 
 	return 1;
 }
@@ -17151,23 +17000,25 @@ isdoublez(struct atom *p)
 int
 isdenominator(struct atom *p)
 {
-	if (car(p) == symbol(POWER) && isnegativenumber(caddr(p)))
+	if (car(p) == symbol(POWER) && isnegativenumber(caddr(p))){
 		return 1;
-	else if (isrational(p) && !MEQUAL(p->u.q.b, 1))
+	}else if (isrational(p) && !MEQUAL(p->u.q.b, 1)){
 		return 1;
-	else
+	}else{
 		return 0;
+	}
 }
 
 int
 isnumerator(struct atom *p)
 {
-	if (car(p) == symbol(POWER) && isnegativenumber(caddr(p)))
+	if (car(p) == symbol(POWER) && isnegativenumber(caddr(p))){
 		return 0;
-	else if (isrational(p) && MEQUAL(p->u.q.a, 1))
+	} else if (isrational(p) && MEQUAL(p->u.q.a, 1)){
 		return 0;
-	else
+	}else{
 		return 1;
+	}
 }
 
 int
@@ -17176,8 +17027,9 @@ hasdouble(struct atom *p)
 	if (iscons(p)) {
 		p = cdr(p);
 		while (iscons(p)) {
-			if (hasdouble(car(p)))
+			if (hasdouble(car(p))){
 				return 1;
+			}
 			p = cdr(p);
 		}
 		return 0;
@@ -17191,8 +17043,9 @@ isdenormalpolar(struct atom *p)
 	if (car(p) == symbol(ADD)) {
 		p = cdr(p);
 		while (iscons(p)) {
-			if (isdenormalpolarterm(car(p)))
+			if (isdenormalpolarterm(car(p))){
 				return 1;
+			}
 			p = cdr(p);
 		}
 		return 0;
@@ -17206,28 +17059,31 @@ isdenormalpolar(struct atom *p)
 int
 isdenormalpolarterm(struct atom *p)
 {
-	if (car(p) != symbol(MULTIPLY))
+	if (car(p) != symbol(MULTIPLY)){
 		return 0;
+	}
 
-	if (lengthf(p) == 3 && isimaginaryunit(cadr(p)) && caddr(p) == symbol(PI))
+	if (lengthf(p) == 3 && isimaginaryunit(cadr(p)) && caddr(p) == symbol(PI)){
 		return 1; // exp(i pi)
+		}
 
-	if (lengthf(p) != 4 || !isnum(cadr(p)) || !isimaginaryunit(caddr(p)) || cadddr(p) != symbol(PI))
+	if (lengthf(p) != 4 || !isnum(cadr(p)) || !isimaginaryunit(caddr(p)) || cadddr(p) != symbol(PI)){
 		return 0;
+	}
 
 	p = cadr(p); // p = coeff of term
 
-	if (isnegativenumber(p))
+	if (isnegativenumber(p)){
 		return 1; // p < 0
-
+	}
 	push(p);
 	push_rational(-1, 2);
 	add();
 	p = pop();
 
-	if (!isnegativenumber(p))
+	if (!isnegativenumber(p)){
 		return 1; // p >= 1/2
-
+	}
 	return 0;
 }
 
@@ -17240,20 +17096,22 @@ issquarematrix(struct atom *p)
 int
 issmallinteger(struct atom *p)
 {
-	if (isinteger(p))
+	if (isinteger(p)){
 		return MLENGTH(p->u.q.a) == 1 && p->u.q.a[0] <= 0x7fffffff;
+	}
 
-	if (isdouble(p))
+	if (isdouble(p)){
 		return p->u.d == floor(p->u.d) && fabs(p->u.d) <= 0x7fffffff;
+	}
 
 	return 0;
 }
 void
 run(char *buf)
 {
-	if (setjmp(jmpbuf0))
+	if (setjmp(jmpbuf0)){
 		return;
-
+	}
 	tos = 0;
 	interrupt = 0;
 	eval_level = 0;
@@ -17307,8 +17165,9 @@ run_buf(char *buf)
 		dupl();
 		p1 = pop();
 
-		if (p1 != symbol(NIL))
+		if (p1 != symbol(NIL)){
 			set_symbol(symbol(LAST), p1, symbol(NIL));
+		}
 
 		print_result();
 	}
@@ -17325,8 +17184,9 @@ scan_input(char *s)
 	s = scan(s);
 	trace2 = s;
 	p1 = get_binding(symbol(TRACE));
-	if (p1 != symbol(TRACE) && !iszero(p1))
+	if (p1 != symbol(TRACE) && !iszero(p1)){
 		print_trace(BLUE);
+	}
 	return s;
 }
 
@@ -17343,8 +17203,9 @@ print_trace(int color)
 		c = *s++;
 		outbuf_putc(c);
 	}
-	if (c != '\n')
+	if (c != '\n'){
 		outbuf_putc('\n');
+	}
 	printbuf(outbuf, color);
 }
 
@@ -17370,8 +17231,9 @@ run_init_script(void)
 void
 stopf(char *s)
 {
-	if (nonstop)
+	if (nonstop){
 		longjmp(jmpbuf1, 1);
+	}
 	
 	print_trace(RED);
 	snprintf(strbuf, STRBUFLEN, "Stop: %s\n", s);
@@ -17448,11 +17310,13 @@ scan_nib(char *s)
 	scan_str = s;
 	scan_level = 0;
 	get_token_skip_newlines();
-	if (token == T_END)
+	if (token == T_END){
 		return NULL;
+	}
 	scan_stmt();
-	if (token != T_NEWLINE && token != T_END)
+	if (token != T_NEWLINE && token != T_END){
 		scan_error("syntax err"); // unexpected token, for example, 1:2
+	}
 	return scan_str;
 }
 
@@ -17474,23 +17338,23 @@ scan_comparison(void)
 {
 	scan_expression();
 	switch (token) {
-	case T_EQ:
-		push_symbol(TESTEQ); // ==
-		break;
-	case T_LTEQ:
-		push_symbol(TESTLE);
-		break;
-	case T_GTEQ:
-		push_symbol(TESTGE);
-		break;
-	case '<':
-		push_symbol(TESTLT);
-		break;
-	case '>':
-		push_symbol(TESTGT);
-		break;
-	default:
-		return;
+		case T_EQ:
+			push_symbol(TESTEQ); // ==
+			break;
+		case T_LTEQ:
+			push_symbol(TESTLE);
+			break;
+		case T_GTEQ:
+			push_symbol(TESTGE);
+			break;
+		case '<':
+			push_symbol(TESTLT);
+			break;
+		case '>':
+			push_symbol(TESTGT);
+			break;
+		default:
+			return;
 	}
 	swap();
 	get_token_skip_newlines(); // get token after rel op
@@ -17503,17 +17367,20 @@ scan_expression(void)
 {
 	int h = tos, t;
 	t = token;
-	if (token == '+' || token == '-')
+	if (token == '+' || token == '-'){
 		get_token_skip_newlines();
+	}
 	scan_term();
-	if (t == '-')
+	if (t == '-'){
 		static_negate();
+	}
 	while (token == '+' || token == '-') {
 		t = token;
 		get_token_skip_newlines(); // get token after '+' or '-'
 		scan_term();
-		if (t == '-')
+		if (t == '-'){
 			static_negate();
+		}
 	}
 	if (tos - h > 1) {
 		list(tos - h);
@@ -17527,17 +17394,17 @@ int
 another_factor_pending(void)
 {
 	switch (token) {
-	case '*':
-	case '/':
-	case '(':
-	case T_SYMBOL:
-	case T_FUNCTION:
-	case T_INTEGER:
-	case T_DOUBLE:
-	case T_STRING:
-		return 1;
-	default:
-		break;
+		case '*':
+		case '/':
+		case '(':
+		case T_SYMBOL:
+		case T_FUNCTION:
+		case T_INTEGER:
+		case T_DOUBLE:
+		case T_STRING:
+			return 1;
+		default:
+			break;
 	}
 	return 0;
 }
@@ -17553,13 +17420,15 @@ scan_term(void)
 
 		t = token;
 
-		if (token == '*' || token == '/')
+		if (token == '*' || token == '/'){
 			get_token_skip_newlines();
+		}
 
 		scan_power();
 
-		if (t == '/')
+		if (t == '/'){
 			static_reciprocate();
+		}
 	}
 
 	if (tos - h > 1) {
@@ -17633,8 +17502,9 @@ scan_factor(void)
 			get_token(); // get token after ','
 			scan_expression();
 		}
-		if (token != ']')
+		if (token != ']'){
 			scan_error("expected ']'");
+		}
 		scan_level--;
 		get_token(); // get token after ']'
 		list(tos - h);
@@ -17651,7 +17521,7 @@ scan_factor(void)
 void
 scan_symbol(void)
 {
-	if (scan_mode && strlen((const char *)token_buf) == 1)
+	if (scan_mode && strlen((const char *)token_buf) == 1){
 		switch (token_buf[0]) {
 		case 'a':
 			push_symbol(SA);
@@ -17666,8 +17536,9 @@ scan_symbol(void)
 			push(lookup(token_buf));
 			break;
 		}
-	else
+	}else{
 		push(lookup(token_buf));
+	}
 	get_token();
 }
 
@@ -17697,8 +17568,9 @@ scan_function_call(void)
 		get_token(); // get token after ','
 		scan_stmt();
 	}
-	if (token != ')')
+	if (token != ')'){
 		scan_error("expected ')'");
+	}
 	scan_level--;
 	get_token(); // get token after ')'
 	list(tos - h);
@@ -17739,16 +17611,19 @@ scan_subexpr(void)
 		get_token(); // get token after ','
 		scan_stmt();
 	}
-	if (token != ')')
+	if (token != ')'){
 		scan_error("expected ')'");
+	}
 	scan_level--;
 	get_token(); // get token after ')'
 	n = tos - h;
-	if (n < 2)
+	if (n < 2){
 		return;
+	}
 	p = alloc_vector(n);
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n; i++){
 		p->u.tensor->elem[i] = stack[h + i];
+	}
 	tos = h;
 	push(p);
 }
@@ -17765,9 +17640,11 @@ void
 get_token(void)
 {
 	get_token_nib();
-	if (scan_level)
-		while (token == T_NEWLINE)
+	if (scan_level){
+		while (token == T_NEWLINE){
 			get_token_nib();
+		}
+	}
 }
 
 void
@@ -17775,9 +17652,9 @@ get_token_nib(void)
 {
 	// skip spaces
 
-	while (*scan_str != '\0' && *scan_str != '\n' && *scan_str != '\r' && (*scan_str < 33 || *scan_str > 126))
+	while (*scan_str != '\0' && *scan_str != '\n' && *scan_str != '\r' && (*scan_str < 33 || *scan_str > 126)){
 		scan_str++;
-
+	}
 	token_str = scan_str;
 
 	// end of input?
@@ -17798,10 +17675,12 @@ get_token_nib(void)
 	// comment?
 
 	if (*scan_str == '#' || (scan_str[0] == '-' && scan_str[1] == '-')) {
-		while (*scan_str && *scan_str != '\n' && *scan_str != '\r')
+		while (*scan_str && *scan_str != '\n' && *scan_str != '\r'){
 			scan_str++;
-		if (*scan_str)
+		}
+		if (*scan_str){
 			scan_str++;
+		}
 		token = T_NEWLINE;
 		return;
 	}
@@ -17809,17 +17688,21 @@ get_token_nib(void)
 	// number?
 
 	if (isdigit(*scan_str) || *scan_str == '.') {
-		while (isdigit(*scan_str))
+		while (isdigit(*scan_str)){
 			scan_str++;
+		}
 		if (*scan_str == '.') {
 			scan_str++;
-			while (isdigit(*scan_str))
+			while (isdigit(*scan_str)){
 				scan_str++;
-			if (token_str + 1 == scan_str)
+			}
+			if (token_str + 1 == scan_str){
 				scan_error("expected decimal digit"); // only a decimal point
+			}
 			token = T_DOUBLE;
-		} else
+		} else{
 			token = T_INTEGER;
+		}
 		update_token_buf(token_str, scan_str);
 		return;
 	}
@@ -17829,10 +17712,11 @@ get_token_nib(void)
 	if (isalpha(*scan_str)) {
 		while (isalnum(*scan_str))
 			scan_str++;
-		if (*scan_str == '(')
+		if (*scan_str == '('){
 			token = T_FUNCTION;
-		else
+		}else{
 			token = T_SYMBOL;
+		}
 		update_token_buf(token_str, scan_str);
 		return;
 	}
@@ -17843,8 +17727,9 @@ get_token_nib(void)
 		scan_str++;
 		while (*scan_str && *scan_str != '"' && *scan_str != '\n' && *scan_str != '\r')
 			scan_str++;
-		if (*scan_str != '"')
+		if (*scan_str != '"'){
 			scan_error("runaway string");
+		}	
 		scan_str++;
 		token = T_STRING;
 		update_token_buf(token_str + 1, scan_str - 1); // don't include quote chars
@@ -17890,8 +17775,9 @@ update_token_buf(char *a, char *b)
 	m = 1000 * (n / 1000 + 1); // m is a multiple of 1000
 
 	if (m > token_buf_len) {
-		if (token_buf)
+		if (token_buf){
 			e_free(token_buf);
+		}
 		token_buf = alloc_mem(m);
 		token_buf_len = m;
 	}
@@ -17967,8 +17853,9 @@ static_reciprocate(void)
 		return;
 	}
 
-	if (!isrational(p1) || !isequaln(p1, 1))
+	if (!isrational(p1) || !isequaln(p1, 1)){
 		push(p1); // p1 != 1
+	}
 
 	if (isnum(p2)) {
 		push(p2);
@@ -17993,18 +17880,21 @@ static_reciprocate(void)
 void
 push(struct atom *p)
 {
-	if (tos < 0 || tos >= STACKSIZE)
+	if (tos < 0 || tos >= STACKSIZE){
 		exitf("stack error, circular definition?");
+	}
 	stack[tos++] = p;
-	if (tos > max_tos)
+	if (tos > max_tos){
 		max_tos = tos;
+	}
 }
 
 struct atom *
 pop(void)
 {
-	if (tos < 1 || tos > STACKSIZE)
+	if (tos < 1 || tos > STACKSIZE){
 		exitf("stack error");
+	}
 	return stack[--tos];
 }
 
@@ -18070,10 +17960,11 @@ push_integer(int n)
 void
 push_rational(int a, int b)
 {
-	if (a < 0)
+	if (a < 0){
 		push_bignum(MMINUS, mint(-a), mint(b));
-	else
+	}else{
 		push_bignum(MPLUS, mint(a), mint(b));
+	}
 }
 
 void
@@ -18115,9 +18006,9 @@ pop_integer(void)
 		n = p->u.q.a[0];
 		if (isnegativenumber(p))
 			n = -n;
-	} else
+	} else{
 		n = (int) p->u.d;
-
+	}
 	return n;
 }
 
@@ -18139,12 +18030,12 @@ pop_double(void)
 
 	p = pop();
 
-	if (!isnum(p))
+	if (!isnum(p)){
 		stopf("number expected");
-
-	if (isdouble(p))
+	}
+	if (isdouble(p)){
 		d = p->u.d;
-	else {
+	}else {
 		a = mfloat(p->u.q.a);
 		b = mfloat(p->u.q.b);
 		d = a / b;
@@ -18162,10 +18053,10 @@ push_string(char *s)
 	p = alloc_str();
 	//s = strdup(s);
 	char *ns = e_malloc(strlen((const char *)s) + 1);
-	if (ns == NULL)
+	if (ns == NULL){
 		stopf("push_string memory alloc error");
+	}	
 	memcpy(ns, s, strlen((const char *)s) + 1);
-
 	p->u.str = ns;
 	push(p);
 }
@@ -18177,10 +18068,12 @@ slice(int h, int n)
 {
 	int i, m;
 	m = tos - h - n;
-	if (m < 0)
+	if (m < 0){
 		stopf("stack slice error");
-	for (i = 0; i < m; i++)
+	}	
+	for (i = 0; i < m; i++){
 		stack[h + i] = stack[h + n + i];
+	}	
 	tos -= n;
 }
 // symbol lookup, create symbol if not found
@@ -18191,29 +18084,32 @@ lookup(char *s)
 	int i, k;
 	struct atom *p;
 
-	if (isupper(*s))
+	if (isupper(*s)){
 		k = BUCKETSIZE * (*s - 'A');
-	else if (islower(*s))
+	}else if (islower(*s)){
 		k = BUCKETSIZE * (*s - 'a');
-	else
+	}else{
 		k = BUCKETSIZE * 26;
-
+	}
 	for (i = 0; i < BUCKETSIZE; i++) {
 		p = symtab[k + i];
-		if (p == NULL)
+		if (p == NULL){
 			break;
-		if (strcmp(s, printname(p)) == 0)
+		}
+		if (strcmp(s, printname(p)) == 0){
 			return p;
+		}	
 	}
 
-	if (i == BUCKETSIZE)
+	if (i == BUCKETSIZE){
 		stopf("symbol table full");
-
+	}
 	p = alloc_atom();
 	//s = strdup(s);
 	char *ns = e_malloc(strlen((const char *)s) + 1);
-	if (ns == NULL)
+	if (ns == NULL){
 		stopf("lookup memory alloc error");
+	}
 	memcpy(ns, s, strlen((const char *)s) + 1);
 	//if (s == NULL)
 	//	exit(1);
@@ -18229,19 +18125,22 @@ lookup(char *s)
 char *
 printname(struct atom *p)
 {
-	if (iskeyword(p))
+	if (iskeyword(p)){
 		return p->u.ksym.name;
-	else if (isusersymbol(p))
+	}else if (isusersymbol(p)){
 		return p->u.usym.name;
-	else
+	}else{
 		return "?";
+	}		
 }
 
 void
 set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
 {
-	if (!isusersymbol(p1))
+	if (!isusersymbol(p1)){
 		stopf("symbol error");
+	}
+		
 	binding[p1->u.usym.index] = p2;
 	usrfunc[p1->u.usym.index] = p3;
 }
@@ -18253,8 +18152,9 @@ get_binding(struct atom *p1)
 	if (!isusersymbol(p1))
 		stopf("symbol error");
 	p2 = binding[p1->u.usym.index];
-	if (p2 == NULL || p2 == symbol(NIL))
+	if (p2 == NULL || p2 == symbol(NIL)){
 		p2 = p1; // symbol binds to itself
+	}
 	return p2;
 }
 
@@ -18264,8 +18164,9 @@ get_usrfunc(struct atom *p)
 	if (!isusersymbol(p))
 		stopf("symbol error");
 	p = usrfunc[p->u.usym.index];
-	if (p == NULL)
+	if (p == NULL){
 		p = symbol(NIL);
+	}
 	return p;
 }
 
@@ -18473,8 +18374,10 @@ init_symbol_table(void)
 	for (i = 0; i < n; i++) {
 		p = alloc_atom();
 		s = e_malloc(strlen((const char *)(stab[i].str)) + 1);
-		if (s == NULL)
+		if (s == NULL){
 			stopf("symbol table init error");
+		}
+			
 		memcpy(s, stab[i].str, strlen((const char *)(stab[i].str)) + 1);	
 		
 		if (stab[i].func) {
