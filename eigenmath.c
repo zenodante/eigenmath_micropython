@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "py/misc.h"
 #include "py/runtime.h"
 #include "py/objstr.h"
-
+#include "eigenmath.h"
 //#define STACKSIZE 100000 // evaluation stack
 //#define BLOCKSIZE 10000
 //#define MAXBLOCKS 2000

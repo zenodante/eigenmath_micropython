@@ -10,7 +10,7 @@ extern "C" {
 
 
 #define STRBUFLEN 1000
-#define BUCKETSIZE 50
+#define BUCKETSIZE 100
 #define MAXDIM 24
 
 //extern struct atom *mem ;
