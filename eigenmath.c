@@ -606,7 +606,7 @@ void integral(void);
 void integral_nib(struct atom *F, struct atom *X);
 void integral_lookup(int h, struct atom *F);
 int integral_classify(struct atom *p);
-int integral_search(int h, struct atom *F, char **table, int n);
+int integral_search(int h, struct atom *F, const char * const *table, int n);
 int integral_search_nib(int h, struct atom *F, struct atom *I, struct atom *C);
 void decomp(void);
 void decomp_sum(struct atom *F, struct atom *X);
@@ -933,6 +933,10 @@ void eigenmath_init(uint8_t *pHeap,size_t heapSize){
 	symtab = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
 	binding = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
 	usrfunc = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	if (stack == NULL || symtab == NULL || binding == NULL || usrfunc == NULL) {
+		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize fixed ram area"));
+		return;
+	}
 }
 
 
@@ -942,7 +946,7 @@ void init_block(struct atom *mem){
 	p=mem;
 	for (int j = 0; j <MAXATOMS - 1; j++) {
 		mem[j].atomtype = FREEATOM;
-		mem[j].u.next = mem + j + 1;
+		mem[j].u.next = mem [j + 1];
 	}
 	mem[MAXATOMS - 1].atomtype = FREEATOM;
 	mem[MAXATOMS - 1].u.next = NULL;
@@ -7293,7 +7297,7 @@ const char * const integral_tab_exp[] = {
 
 // log(a x) is transformed to log(a) + log(x)
 
-char *integral_tab_log[] = {
+const char * const integral_tab_log[] = {
 
 	"log(x)",
 	"x log(x) - x",
@@ -7340,7 +7344,7 @@ char *integral_tab_log[] = {
 	"1",
 };
 
-char *integral_tab_trig[] = {
+const char * const integral_tab_trig[] = {
 
 	"sin(a x)",
 	"-cos(a x) / a",
@@ -7599,7 +7603,7 @@ char *integral_tab_trig[] = {
 	"1",
 };
 
-char *integral_tab_power[] = {
+const char * const integral_tab_power[] = {
 
 	"a", // for forms c^d where both c and d are constant expressions
 	"a x",
@@ -7720,7 +7724,7 @@ char *integral_tab_power[] = {
 	"1",
 };
 
-char *integral_tab[] = {
+const char * const integral_tab[] = {
 
 	"a",
 	"a x",
@@ -8177,17 +8181,17 @@ integral_classify(struct atom *p)
 }
 
 int
-integral_search(int h, struct atom *F, char **table, int n)
+integral_search(int h, struct atom *F, const char * const *table, int n)
 {
 	int i;
 	struct atom *C, *I;
 
 	for (i = 0; i < n; i += 3) {
 
-		scan1(table[i + 0]); // integrand
+		scan1((char *)table[i + 0]); // integrand
 		I = pop();
 
-		scan1(table[i + 2]); // condition
+		scan1((char *)table[i + 2]); // condition
 		C = pop();
 
 		if (integral_search_nib(h, F, I, C))
@@ -8199,7 +8203,7 @@ integral_search(int h, struct atom *F, char **table, int n)
 
 	tos = h; // pop all
 
-	scan1(table[i + 1]); // answer
+	scan1((char *)table[i + 1]); // answer
 	evalf();
 
 	return 1;
@@ -14997,7 +15001,7 @@ factor_int(int n)
 
 	for (k = 0; k < NPRIME; k++) {
 
-		d = primetab[k];
+		d = (int)primetab[k];
 
 		m = 0;
 
@@ -15040,11 +15044,11 @@ factor_int(int n)
 #define VAL2(p) ((int) cadr(p)->u.d)
 
 #define PLUS_SIGN '+'
-#define MINUS_SIGN 0xe28892
-#define MULTIPLY_SIGN 0xc397
-#define GREATEREQUAL 0xe289a5
-#define LESSEQUAL 0xe289a4
-
+#define MINUS_SIGN 0x2D       // '-' 0xe28892
+#define MULTIPLY_SIGN 0x2A       // '*' 0xc397
+#define GREATEREQUAL 0xF2 //   IBM code page 437   0xe289a5
+#define LESSEQUAL 0xF3//   IBM code page 437   0xe289a4
+/*
 #define BDLL 0xe295b4 // BOX DRAW LIGHT LEFT
 #define BDLR 0xe295b6 // BOX DRAW LIGHT RIGHT
 
@@ -15055,6 +15059,20 @@ factor_int(int n)
 #define BDLDAL 0xe29490 // BOX DRAW LIGHT DOWN AND LEFT
 #define BDLUAR 0xe29494 // BOX DRAW LIGHT UP AND RIGHT
 #define BDLUAL 0xe29498 // BOX DRAW LIGHT UP AND LEFT
+*/
+/*  ─ */
+#define BDLL      0xC4   /* ╴→ ─ */
+#define BDLR      0xC4   /* ╶→ ─ */
+
+/*  */
+#define BDLH      0xC4   /* ─ */
+#define BDLV      0xB3   /* │ */
+
+/*  */
+#define BDLDAR    0xDA   /* ┌ */
+#define BDLDAL    0xBF   /* ┐ */
+#define BDLUAR    0xC0   /* └ */
+#define BDLUAL    0xD9   /* ┘ */
 
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -15094,6 +15112,9 @@ fmt(void)
 		if (fmt_buf)
 			e_free(fmt_buf);
 		fmt_buf = alloc_mem(m);
+		if (!fmt_buf) {
+			stopf("fmt: out of memory allocating %d bytes", m);
+		}
 		fmt_buf_len = m;
 	}
 
@@ -15780,55 +15801,55 @@ const char * const symbol_name_tab[NUM_SYMBOL_NAMES] = {
 
 const int symbol_unicode_tab[NUM_SYMBOL_NAMES] = {
 
-	0xce91, // Alpha
-	0xce92, // Beta
-	0xce93, // Gamma
-	0xce94, // Delta
-	0xce95, // Epsilon
-	0xce96, // Zeta
-	0xce97, // Eta
-	0xce98, // Theta
-	0xce99, // Iota
-	0xce9a, // Kappa
+	0x41, // Alpha  0xce91
+	0x42, // Beta 0xce92
+	0xE2, // Gamma 0xce93
+	0x7F, // Delta0xce94
+	0x45, // Epsilon0xce95
+	0x5A, // Zeta0xce96
+	0x48, // Eta0xce97
+	0xE9, // Theta0xce98
+	0x49, // Iota0xce99
+	0x4B, // Kappa0xce9a
 	0xce9b, // Lambda
-	0xce9c, // Mu
-	0xce9d, // Nu
+	0x4D, // Mu0xce9c
+	0x4E, // Nu0xce9d
 	0xce9e, // Xi
-	0xce9f, // Omicron
-	0xcea0, // Pi
-	0xcea1, // Rho
-	0xcea3, // Sigma
-	0xcea4, // Tau
-	0xcea5, // Upsilon
-	0xcea6, // Phi
-	0xcea7, // Chi
-	0xcea8, // Psi
-	0xcea9, // Omega
+	0x4F, // Omicron0xce9f
+	0xE3, // Pi0xcea0
+	0x50, // Rho0xcea1
+	0xE4, // Sigma 0xcea3
+	0x54, // Tau0xcea4
+	0x59, // Upsilon0xcea5
+	0xE8, // Phi0xcea6
+	0x58, // Chi0xcea7
+	0xcea8, // Psi0xcea8
+	0xEA, // Omega0xcea9
 
-	0xceb1, // alpha
-	0xceb2, // beta
-	0xceb3, // gamma
-	0xceb4, // delta
-	0xceb5, // epsilon
-	0xceb6, // zeta
-	0xceb7, // eta
-	0xceb8, // theta
-	0xceb9, // iota
-	0xceba, // kappa
+	0xE0, // alpha0xceb1
+	0xE1, // beta0xceb2
+	0x72, // gamma0xceb3
+	0xEB, // delta0xceb4
+	0xEE, // epsilon0xceb5
+	0x7A, // zeta0xceb6
+	0x6E, // eta0xceb7
+	0xE9, // theta0xceb8
+	0x69, // iota0xceb9
+	0x6B, // kappa0xceba
 	0xcebb, // lambda
-	0xcebc, // mu
-	0xcebd, // nu
+	0xE6, // mu0xcebc
+	0x76, // nu0xcebd
 	0xcebe, // xi
-	0xcebf, // omicron
-	0xcf80, // pi
-	0xcf81, // rho
-	0xcf83, // sigma
-	0xcf84, // tau
-	0xcf85, // upsilon
-	0xcf86, // phi
-	0xcf87, // chi
+	0x6F, // omicron0xcebf
+	0xE3, // pi0xcf80
+	0x70, // rho0xcf81
+	0xE5, // sigma0xcf83
+	0xE7, // tau0xcf84
+	0x75, // upsilon0xcf85
+	0xED, // phi0xcf86
+	0x78, // chi0xcf87
 	0xcf88, // psi
-	0xcf89, // omega
+	0x77, // omega0xcf89
 
 	0xc4a7, // hbar
 };
@@ -15840,7 +15861,7 @@ fmt_symbol_fragment(char *s, int k)
 	char *t;
 
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
-		t = symbol_name_tab[i];
+		t = (char)symbol_name_tab[i];
 		n = (int) strlen(t);
 		if (strncmp(s + k, t, n) == 0)
 			break;
@@ -15851,7 +15872,7 @@ fmt_symbol_fragment(char *s, int k)
 		return k + 1;
 	}
 
-	c = symbol_unicode_tab[i];
+	c = (int)symbol_unicode_tab[i];
 
 	fmt_roman_char(c);
 
@@ -17180,7 +17201,7 @@ const char *init_script =
 void
 run_init_script(void)
 {
-	run_buf(init_script);
+	run_buf((char *)init_script);
 }
 
 void

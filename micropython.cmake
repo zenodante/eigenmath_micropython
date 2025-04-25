@@ -12,6 +12,7 @@ target_sources(usermod_eigenmath INTERFACE
 target_include_directories(usermod_eigenmath INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}
 )
+set(PICO_STACK_SIZE 0x4000 CACHE STRING "App stack size" FORCE)
 
 # Link our INTERFACE library to the usermod target.
 target_link_libraries(usermod INTERFACE usermod_eigenmath)

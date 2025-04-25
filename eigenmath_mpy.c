@@ -17,7 +17,7 @@
 #include "py/gc.h"
 #include "eigenmath.h"
 
-
+//-DPICO_STACK_SIZE=0x4000 ??
 
 typedef struct _mp_obj_eigenmath_t {
     mp_obj_base_t base;
