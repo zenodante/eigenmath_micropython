@@ -579,7 +579,9 @@ void eval_index(struct atom *p1);
 void indexfunc(struct atom *T, int h);
 void eval_infixform(struct atom *p1);
 void print_infixform(struct atom *p);
+void print_pythonform(struct atom *p);
 void infixform_subexpr(struct atom *p);
+void pythonform_expr(struct atom *p, int parent_prec);
 void infixform_expr(struct atom *p);
 void infixform_expr_nib(struct atom *p);
 void infixform_term(struct atom *p);
@@ -6416,6 +6418,161 @@ eval_infixform(struct atom *p1)
 }
 
 // for tty mode and debugging
+void
+print_pythonform(struct atom *p)
+{
+    outbuf_init();                      
+    pythonform_expr(p, 0);               
+    outbuf_puts("\n");                   
+    printbuf(outbuf, BLACK);             
+}
+#define PREC_ADD      10
+#define PREC_MULTIPLY 20
+#define PREC_POWER    30
+#define PREC_ATOM     40
+#define PY_ADD_OP   " + "
+#define PY_SUB_OP   " - "
+#define PY_MUL_OP   " * "
+#define PY_POW_OP   "**"
+
+static void pythonform_expr(struct atom *p, int parent_prec) {
+    int my_prec = PREC_ATOM;
+
+    // 有理数（分数）
+    if (isrational(p)) {
+        struct atom *num = numerator(p);
+        struct atom *den = denominator(p);
+        // 分母为 1 时退化为整数
+        if (isint(den) && den->u.q.a[0] == 1) {
+            pythonform_expr(num, parent_prec);
+        } else {
+            pythonform_expr(num, PREC_ATOM);
+            outbuf_putc('/');
+            pythonform_expr(den, PREC_ATOM);
+        }
+        return;
+    }
+
+    // 复数
+    if (iscomplex(p)) {
+        struct atom *re = realpart(p);
+        struct atom *im = imagpart(p);
+        // 打印实部（可能为 0，也打印）
+        pythonform_expr(re, PREC_ADD);
+
+        // 虚部符号
+        bool im_neg = false;
+        if ((isdouble(im) && im->u.d < 0) || (isinteger(im) && im->u.q.a[0] < 0)) {
+            im_neg = true;
+        }
+        outbuf_puts(im_neg ? PY_SUB_OP : PY_ADD_OP);
+
+        // 打印绝对值虚部
+        if (im_neg) {
+            // 若接口不存在，可临时取绝对值
+            if (isdouble(im)) im->u.d = -im->u.d;
+            else if (isinteger(im)) im->u.q.a[0] = -im->u.q.a[0];
+        }
+        pythonform_expr(im, PREC_ATOM);
+        // Python 虚数单位
+        outbuf_putc('j');
+        return;
+    }
+
+    // 列表（操作符）处理
+    if (iscons(p)) {
+        struct atom *op = car(p);
+
+        // 加法与减法
+        if (op == symbol(ADD)) {
+            my_prec = PREC_ADD;
+            if (my_prec < parent_prec) outbuf_putc('(');
+            // 首项
+            pythonform_expr(cadr(p), my_prec);
+            // 其余项
+            struct atom *rest = cddr(p);
+            while (iscons(rest)) {
+                struct atom *term = car(rest);
+                if (isinteger(term) && term->u.q.a[0] < 0) {
+                    outbuf_puts(PY_SUB_OP);
+                    term->u.q.a[0] = -term->u.q.a[0];
+                    pythonform_expr(term, my_prec);
+                } else {
+                    outbuf_puts(PY_ADD_OP);
+                    pythonform_expr(term, my_prec);
+                }
+                rest = cdr(rest);
+            }
+            if (my_prec < parent_prec) outbuf_putc(')');
+            return;
+        }
+
+        // 乘法
+        if (op == symbol(MULTIPLY)) {
+            my_prec = PREC_MULTIPLY;
+            if (my_prec < parent_prec) outbuf_putc('(');
+            pythonform_expr(cadr(p), my_prec);
+            struct atom *rest = cddr(p);
+            while (iscons(rest)) {
+                outbuf_puts(PY_MUL_OP);
+                pythonform_expr(car(rest), my_prec);
+                rest = cdr(rest);
+            }
+            if (my_prec < parent_prec) outbuf_putc(')');
+            return;
+        }
+
+        // 幂运算
+        if (op == symbol(POWER)) {
+            my_prec = PREC_POWER;
+            if (my_prec < parent_prec) outbuf_putc('(');
+            pythonform_expr(cadr(p), my_prec);
+            outbuf_puts(PY_POW_OP);
+            pythonform_expr(caddr(p), my_prec + 1);
+            if (my_prec < parent_prec) outbuf_putc(')');
+            return;
+        }
+
+        // 其它函数调用
+        outbuf_puts(printname(op));
+        outbuf_putc('(');
+        struct atom *arg = cdr(p);
+        bool first = true;
+        while (iscons(arg)) {
+            if (!first) outbuf_puts(", ");
+            pythonform_expr(car(arg), 0);
+            first = false;
+            arg = cdr(arg);
+        }
+        outbuf_putc(')');
+        return;
+    }
+
+    // 双精度
+    if (isdouble(p)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.8g", p->u.d);
+        outbuf_puts(buf);
+        return;
+    }
+
+    // 整数
+    if (isinteger(p)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%d", p->u.q.a[0]);
+        outbuf_puts(buf);
+        return;
+    }
+
+    // 用户符号
+    if (isusersymbol(p)) {
+        outbuf_puts(printname(p));
+        return;
+    }
+
+    // 兜底
+    outbuf_puts("<?> (unsupported)");
+}
 
 void
 print_infixform(struct atom *p)
@@ -11519,8 +11676,14 @@ print_result(void)
 	if (p1 == symbol(TTY) || iszero(p1)) {
 		push(p2);
 		display();
-	} else
+	} else if (isnum(p1) && get_integer_value(p1) == 1) {
 		print_infixform(p2);
+	} else if (isnum(p1) && get_integer_value(p1) == 2) {
+		print_pythonform(p2);
+	} else {
+		push(p2);
+		display(); // fallback
+	}
 }
 
 // returns 1 if result should be annotated
