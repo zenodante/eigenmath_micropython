@@ -1064,7 +1064,7 @@ mscan(char *s)
 	int i, k, len;
 	uint32_t *a, *b, *t;
 	a = mint(0);
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 	if (len == 0)
 		return a;
 	k = len % 9;
@@ -15862,7 +15862,7 @@ fmt_symbol_fragment(char *s, int k)
 
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
 		t = (char)symbol_name_tab[i];
-		n = (int) strlen(t);
+		n = (int) strlen((const char *)t);
 		if (strncmp(s + k, t, n) == 0)
 			break;
 	}
@@ -16753,7 +16753,7 @@ outbuf_puts(char *s)
 {
 	int len, m;
 
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 
 	// Let outbuf_index + len == 1000
 
@@ -17488,7 +17488,7 @@ scan_factor(void)
 void
 scan_symbol(void)
 {
-	if (scan_mode && strlen(token_buf) == 1)
+	if (scan_mode && strlen((const char *)token_buf) == 1)
 		switch (token_buf[0]) {
 		case 'a':
 			push_symbol(SA);
@@ -17998,10 +17998,10 @@ push_string(char *s)
 	struct atom *p;
 	p = alloc_str();
 	//s = strdup(s);
-	char *ns = e_malloc(strlen(s) + 1);
+	char *ns = e_malloc(strlen((const char *)s) + 1);
 	if (ns == NULL)
 		stopf("push_string memory alloc error");
-	memcpy(ns, s, strlen(s) + 1);
+	memcpy(ns, s, strlen((const char *)s) + 1);
 
 	p->u.str = ns;
 	push(p);
@@ -18048,10 +18048,10 @@ lookup(char *s)
 
 	p = alloc_atom();
 	//s = strdup(s);
-	char *ns = e_malloc(strlen(s) + 1);
+	char *ns = e_malloc(strlen((const char *)s) + 1);
 	if (ns == NULL)
 		stopf("lookup memory alloc error");
-	memcpy(ns, s, strlen(s) + 1);
+	memcpy(ns, s, strlen((const char *)s) + 1);
 	//if (s == NULL)
 	//	exit(1);
 	p->atomtype = USYM;
@@ -18309,10 +18309,10 @@ init_symbol_table(void)
 
 	for (i = 0; i < n; i++) {
 		p = alloc_atom();
-		s = e_malloc(strlen(stab[i].str) + 1);
+		s = e_malloc(strlen((const char *)(stab[i].str)) + 1);
 		if (s == NULL)
 			stopf("symbol table init error");
-		memcpy(s, stab[i].str, strlen(stab[i].str) + 1);	
+		memcpy(s, stab[i].str, strlen((const char *)(stab[i].str)) + 1);	
 		
 		if (stab[i].func) {
 			p->atomtype = KSYM;
