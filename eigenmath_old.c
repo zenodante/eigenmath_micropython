@@ -35,25 +35,23 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <setjmp.h>
 #include <math.h>
 #include <errno.h>
-#include "eigenmath.h"
-#include "eheap.h"
 #include "py/obj.h"
 //#include "py/mpconfig.h"
 #include "py/misc.h"
 #include "py/runtime.h"
 #include "py/objstr.h"
+#include "py/gc.h"
 
-//#define STACKSIZE 100000 // evaluation stack
-//#define BLOCKSIZE 10000
-//#define MAXBLOCKS 2000
-//#define BUCKETSIZE 100
-//#define STRBUFLEN 1000
-//#define MAXDIM 24
+#include "eigenmem.h" // 自定义内存管理
+//#define STACKSIZE 2048 // evaluation stack
+//#define BLOCKSIZE 512
+//#define MAXBLOCKS 20
+#define OUTBUFDEFAULTSIZE 1000
+#define STRBUFLEN 1000
+#define BUCKETSIZE 50
+#define MAXDIM 24
 
-
-uint32_t STACKSIZE ;
-uint32_t MAXATOMS ; // 10,240 atoms
-
+//#define MAXOUTPUTBUFF 1024
 
 // MAXBLOCKS * BLOCKSIZE = 20,000,000 atoms
 
@@ -82,7 +80,7 @@ uint32_t MAXATOMS ; // 10,240 atoms
 //              |SYM    |    |SYM    |    |SYM    |
 //              |"mul"  |    |"a"    |    |"b"    |
 //              |_______|    |_______|    |_______|
-/**/
+
 struct atom {
 	union {
 		struct {
@@ -124,21 +122,21 @@ struct tensor {
 #define USYM		3
 #define RATIONAL	4
 #define DOUBLE		5
-#define STR		6
+#define STR		    6
 #define TENSOR		7
 
 // symbol table
 
-#define ABS		(0 * BUCKETSIZE + 0)
-#define ADJ		(0 * BUCKETSIZE + 1)
-#define AND		(0 * BUCKETSIZE + 2)
+#define ABS			(0 * BUCKETSIZE + 0)
+#define ADJ			(0 * BUCKETSIZE + 1)
+#define AND			(0 * BUCKETSIZE + 2)
 #define ARCCOS		(0 * BUCKETSIZE + 3)
 #define ARCCOSH		(0 * BUCKETSIZE + 4)
 #define ARCSIN		(0 * BUCKETSIZE + 5)
 #define ARCSINH		(0 * BUCKETSIZE + 6)
 #define ARCTAN		(0 * BUCKETSIZE + 7)
 #define ARCTANH		(0 * BUCKETSIZE + 8)
-#define ARG		(0 * BUCKETSIZE + 9)
+#define ARG			(0 * BUCKETSIZE + 9)
 
 #define BINDING		(1 * BUCKETSIZE + 0)
 
@@ -152,7 +150,7 @@ struct tensor {
 #define COFACTOR	(2 * BUCKETSIZE + 7)
 #define CONJ		(2 * BUCKETSIZE + 8)
 #define CONTRACT	(2 * BUCKETSIZE + 9)
-#define COS		(2 * BUCKETSIZE + 10)
+#define COS			(2 * BUCKETSIZE + 10)
 #define COSH		(2 * BUCKETSIZE + 11)
 
 #define D_UPPER		(3 * BUCKETSIZE + 0)
@@ -160,18 +158,18 @@ struct tensor {
 #define DEFINT		(3 * BUCKETSIZE + 2)
 #define DENOMINATOR	(3 * BUCKETSIZE + 3)
 #define DERIVATIVE	(3 * BUCKETSIZE + 4)
-#define DET		(3 * BUCKETSIZE + 5)
-#define DIM		(3 * BUCKETSIZE + 6)
-#define DO		(3 * BUCKETSIZE + 7)
-#define DOT		(3 * BUCKETSIZE + 8)
+#define DET			(3 * BUCKETSIZE + 5)
+#define DIM			(3 * BUCKETSIZE + 6)
+#define DO			(3 * BUCKETSIZE + 7)
+#define DOT			(3 * BUCKETSIZE + 8)
 #define DRAW		(3 * BUCKETSIZE + 9)
 
 #define EIGENVEC	(4 * BUCKETSIZE + 0)
-#define ERF		(4 * BUCKETSIZE + 1)
+#define ERF			(4 * BUCKETSIZE + 1)
 #define ERFC		(4 * BUCKETSIZE + 2)
 #define EVAL		(4 * BUCKETSIZE + 3)
 #define EXIT		(4 * BUCKETSIZE + 4)
-#define EXP		(4 * BUCKETSIZE + 5)
+#define EXP			(4 * BUCKETSIZE + 5)
 #define EXPCOS		(4 * BUCKETSIZE + 6)
 #define EXPCOSH		(4 * BUCKETSIZE + 7)
 #define EXPFORM		(4 * BUCKETSIZE + 8)
@@ -183,7 +181,7 @@ struct tensor {
 #define FACTORIAL	(5 * BUCKETSIZE + 0)
 #define FLOATF		(5 * BUCKETSIZE + 1)
 #define FLOOR		(5 * BUCKETSIZE + 2)
-#define FOR		(5 * BUCKETSIZE + 3)
+#define FOR			(5 * BUCKETSIZE + 3)
 
 #define H_UPPER		(7 * BUCKETSIZE + 0)
 #define H_LOWER		(7 * BUCKETSIZE + 1)
@@ -195,7 +193,7 @@ struct tensor {
 #define INFIXFORM	(8 * BUCKETSIZE + 3)
 #define INNER		(8 * BUCKETSIZE + 4)
 #define INTEGRAL	(8 * BUCKETSIZE + 5)
-#define INV		(8 * BUCKETSIZE + 6)
+#define INV			(8 * BUCKETSIZE + 6)
 
 #define J_UPPER		(9 * BUCKETSIZE + 0)
 #define J_LOWER		(9 * BUCKETSIZE + 1)
@@ -203,26 +201,26 @@ struct tensor {
 #define KRONECKER	(10 * BUCKETSIZE + 0)
 
 #define LAST		(11 * BUCKETSIZE + 0)
-#define LOG		(11 * BUCKETSIZE + 1)
+#define LOG			(11 * BUCKETSIZE + 1)
 
-#define MAG		(12 * BUCKETSIZE + 0)
+#define MAG			(12 * BUCKETSIZE + 0)
 #define MINOR		(12 * BUCKETSIZE + 1)
 #define MINORMATRIX	(12 * BUCKETSIZE + 2)
-#define MOD		(12 * BUCKETSIZE + 3)
+#define MOD			(12 * BUCKETSIZE + 3)
 
-#define NIL		(13 * BUCKETSIZE + 0)
+#define NIL			(13 * BUCKETSIZE + 0)
 #define NOEXPAND	(13 * BUCKETSIZE + 1)
-#define NOT		(13 * BUCKETSIZE + 2)
+#define NOT			(13 * BUCKETSIZE + 2)
 #define NROOTS		(13 * BUCKETSIZE + 3)
 #define NUMBER		(13 * BUCKETSIZE + 4)
 #define NUMERATOR	(13 * BUCKETSIZE + 5)
 
-#define OR		(14 * BUCKETSIZE + 0)
+#define OR			(14 * BUCKETSIZE + 0)
 #define OUTER		(14 * BUCKETSIZE + 1)
 
 #define P_UPPER		(15 * BUCKETSIZE + 0)
 #define P_LOWER		(15 * BUCKETSIZE + 1)
-#define PI		(15 * BUCKETSIZE + 2)
+#define PI			(15 * BUCKETSIZE + 2)
 #define POLAR		(15 * BUCKETSIZE + 3)
 #define PREFIXFORM	(15 * BUCKETSIZE + 4)
 #define PRINT		(15 * BUCKETSIZE + 5)
@@ -240,22 +238,22 @@ struct tensor {
 #define RECTF		(17 * BUCKETSIZE + 5)
 #define ROOTS		(17 * BUCKETSIZE + 6)
 #define ROTATE		(17 * BUCKETSIZE + 7)
-#define RUN		(17 * BUCKETSIZE + 8)
+#define RUN			(17 * BUCKETSIZE + 8)
 
 #define S_UPPER		(18 * BUCKETSIZE + 0)
 #define S_LOWER		(18 * BUCKETSIZE + 1)
-#define SGN		(18 * BUCKETSIZE + 2)
+#define SGN			(18 * BUCKETSIZE + 2)
 #define SIMPLIFY	(18 * BUCKETSIZE + 3)
-#define SIN		(18 * BUCKETSIZE + 4)
+#define SIN			(18 * BUCKETSIZE + 4)
 #define SINH		(18 * BUCKETSIZE + 5)
 #define SQRT		(18 * BUCKETSIZE + 6)
 #define STATUS		(18 * BUCKETSIZE + 7)
 #define STOP		(18 * BUCKETSIZE + 8)
-#define SUM		(18 * BUCKETSIZE + 9)
+#define SUM			(18 * BUCKETSIZE + 9)
 
 #define T_UPPER		(19 * BUCKETSIZE + 0)
 #define T_LOWER		(19 * BUCKETSIZE + 1)
-#define TAN		(19 * BUCKETSIZE + 2)
+#define TAN			(19 * BUCKETSIZE + 2)
 #define TANH		(19 * BUCKETSIZE + 3)
 #define TAYLOR		(19 * BUCKETSIZE + 4)
 #define TEST		(19 * BUCKETSIZE + 5)
@@ -266,7 +264,7 @@ struct tensor {
 #define TESTLT		(19 * BUCKETSIZE + 10)
 #define TRACE		(19 * BUCKETSIZE + 11)
 #define TRANSPOSE	(19 * BUCKETSIZE + 12)
-#define TTY		(19 * BUCKETSIZE + 13)
+#define TTY			(19 * BUCKETSIZE + 13)
 
 #define U_UPPER		(20 * BUCKETSIZE + 0)
 #define U_LOWER		(20 * BUCKETSIZE + 1)
@@ -288,15 +286,15 @@ struct tensor {
 #define Z_LOWER		(25 * BUCKETSIZE + 1)
 #define ZERO		(25 * BUCKETSIZE + 2)
 
-#define ADD		(26 * BUCKETSIZE + 0)
+#define ADD			(26 * BUCKETSIZE + 0)
 #define MULTIPLY	(26 * BUCKETSIZE + 1)
 #define POWER		(26 * BUCKETSIZE + 2)
 #define INDEX		(26 * BUCKETSIZE + 3)
 #define SETQ		(26 * BUCKETSIZE + 4)
 #define EXP1		(26 * BUCKETSIZE + 5)
-#define SA		(26 * BUCKETSIZE + 6)
-#define SB		(26 * BUCKETSIZE + 7)
-#define SX		(26 * BUCKETSIZE + 8)
+#define SA			(26 * BUCKETSIZE + 6)
+#define SB			(26 * BUCKETSIZE + 7)
+#define SX			(26 * BUCKETSIZE + 8)
 #define ARG1		(26 * BUCKETSIZE + 9)
 #define ARG2		(26 * BUCKETSIZE + 10)
 #define ARG3		(26 * BUCKETSIZE + 11)
@@ -356,56 +354,64 @@ struct tensor {
 #define BLACK 0
 #define BLUE 1
 #define RED 2
+eigen_heap_t  *pHeap=NULL;
+uint32_t STACKSIZE = 2048; // evaluation stack
+//uint32_t BLOCKSIZE = 512;
+//uint32_t MAXBLOCKS = 20;
+uint32_t MAXATOMS = 20 * 512; // 10,240 atoms
 
 //#define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
-#define Trace mp_printf(&mp_plat_print,"[TRACE]%s:%d\n",__func__,__LINE__);
+#define Trace mp_printf(&mp_plat_print, "[TRACE] %s:%d\n", __func__, __LINE__)
+//extern struct atom *mem[MAXBLOCKS]; // an array of pointers
+struct atom *mem = NULL;
+struct atom **stack = NULL; // 
+struct atom **symtab = NULL; // symbol table
+struct atom **binding = NULL;
+struct atom **usrfunc = NULL;
+char *strbuf = NULL;
 
-extern struct atom *mem; // an array of pointers
-extern struct atom *free_list;
-extern int tos; // top of stack
-extern struct atom **stack;
-extern struct atom **symtab;
-extern struct atom **binding;
-extern struct atom **usrfunc;
-extern struct atom *zero;
-extern struct atom *one;
-extern struct atom *minusone;
-extern struct atom *imaginaryunit;
-extern int eval_level;
-extern int gc_level;
-extern int expanding;
-extern int drawing;
-extern int nonstop;
-extern int interrupt;
-extern jmp_buf jmpbuf0;
-extern jmp_buf jmpbuf1;
-extern char *trace1;
-extern char *trace2;
-extern int alloc_count;
-extern int block_count;
-extern int free_count;
-extern int gc_count;
-extern int bignum_count;
-extern int ksym_count;
-extern int usym_count;
-extern int string_count;
-extern int tensor_count;
-extern int max_eval_level;
-extern int max_tos;
-extern int max_tof;
-extern char strbuf[];
-extern char *outbuf;
-extern int outbuf_index;
-extern int outbuf_length;
 
+int tos; // top of stack
+struct atom *free_list;
+struct atom *zero=NULL;
+struct atom *one;
+struct atom *minusone;
+struct atom *imaginaryunit;
+int eval_level;
+int gc_level;
+int expanding;
+int drawing;
+int nonstop;
+int interrupt;
+jmp_buf jmpbuf0;
+jmp_buf jmpbuf1;
+char *trace1;
+char *trace2;
+int alloc_count;
+int block_count;
+int free_count;
+int gc_count;
+int bignum_count;
+int ksym_count;
+int usym_count;
+int string_count;
+int tensor_count;
+int max_eval_level;
+int max_tos;
+int max_tof;
+char *outbuf;
+int outbuf_index;
+int outbuf_length;
 
 void init_block(struct atom *mem);
 struct atom * alloc_atom(void);
+//void alloc_block(void);
 struct atom * alloc_vector(int nrow);
 struct atom * alloc_matrix(int nrow, int ncol);
 struct atom * alloc_tensor(int nelem);
 struct atom * alloc_str(void);
 void * alloc_mem(int n);
+void * alloc_mem_temp(int n);
 double mfloat(uint32_t *p);
 void msetbit(uint32_t *x, uint32_t k);
 void mclrbit(uint32_t *x, uint32_t k);
@@ -606,7 +612,7 @@ void integral(void);
 void integral_nib(struct atom *F, struct atom *X);
 void integral_lookup(int h, struct atom *F);
 int integral_classify(struct atom *p);
-int integral_search(int h, struct atom *F, char **table, int n);
+int integral_search(int h, struct atom *F, const char * const*table, int n);
 int integral_search_nib(int h, struct atom *F, struct atom *I, struct atom *C);
 void decomp(void);
 void decomp_sum(struct atom *F, struct atom *X);
@@ -827,7 +833,7 @@ void gc(void);
 void untag(struct atom *p);
 //int main(int argc, char *argv[]);
 void run_infile(char *infile);
-void run_stdin(void);
+
 void display(void);
 void printbuf(char *s, int color);
 void eval_draw(struct atom *p1);
@@ -912,33 +918,241 @@ void push_string(char *s);
 void slice(int h, int n);
 struct atom * lookup(char *s);
 char * printname(struct atom *p);
-void set_symbol(struct atom *p1, struct atom *p2, struct atom *p3);
+//void set_symbol(struct atom *p1, struct atom *p2, struct atom *p3);
+void set_symbol(struct atom *sym, struct atom *value, struct atom *attr);
 struct atom * get_binding(struct atom *p1);
 struct atom * get_usrfunc(struct atom *p);
 void init_symbol_table(void);
+static inline bool in_tmp(void *ptr);
 
-void eigenmath_init(uint8_t *pHeap,size_t heapSize){
-	eheap_init((void *)pHeap, heapSize);
-	uint32_t sizeOfpAtom = sizeof(struct atom *);
-	//init atom pool
-	MAXATOMS=((heapSize/sizeOfpAtom)*4)/10;
-	STACKSIZE=MAXATOMS/12;
-	mem = e_malloc(sizeof (struct atom) * MAXATOMS);
-	if (mem == NULL) {
-		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
-		return;
-	}
-	init_block(mem);
-	stack = (struct atom **)e_malloc(pHeap, STACKSIZE * sizeOfpAtom);
-	symtab = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
-	binding = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
-	usrfunc = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+static inline bool in_tmp(void *ptr) {
+    return ((uint8_t *)ptr >= pHeap->arena + pHeap->tmp_top);
 }
 
+typedef struct _mp_obj_eigenmath_t {
+    mp_obj_base_t base;
+    eigen_heap_t  heap;
+} mp_obj_eigenmath_t;
+
+static void eigenmath_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    mp_printf(print, "<EigenMath instance>");
+}
+
+//2048,512,20
+static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
+	size_t n_args, size_t n_kw,
+	const mp_obj_t *args) {
+	mp_arg_check_num(n_args, n_kw, 3, 3, false);
+
+	//mp_obj_eigenmath_t *self = m_new_obj(mp_obj_eigenmath_t);
+	mp_obj_eigenmath_t *self = mp_obj_malloc(mp_obj_eigenmath_t, type);
+	self->base.type = type;
 
 
+	STACKSIZE  = mp_obj_get_int(args[0]);
+	//BLOCKSIZE  = mp_obj_get_int(args[1]);
+	MAXATOMS = mp_obj_get_int(args[1]); // 512*20
+	//MAXBLOCKS  = mp_obj_get_int(args[2]);
+	uint32_t sizeOfpAtom = sizeof(struct atom *);	
+
+	if (eigen_heap_init(self->heap, 300000)!=0){
+		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
+		return MP_OBJ_NULL;
+	}; // initialize heap with 300000 bytes
+	pHeap = &self->heap; // set global heap pointer
+	stack = (struct atom **)em_alloc_perm(pHeap, STACKSIZE * sizeOfpAtom);
+	symtab = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	binding = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	usrfunc = (struct atom **)em_alloc_perm(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	mem = (struct atom *)em_alloc_perm(pheap, MAXATOMS*sizeof(struct atom)); // initialize memory blocks to NULL
+	//init_block(mem);//allocate all the memory blocks at once, this is more efficient than allocating them one by one
+	//mem = (struct atom **)em_alloc_perm(pHeap, MAXBLOCKS * sizeOfpAtom); // an array of pointers
+	strbuf = (char *)em_alloc_perm(pHeap, STRBUFLEN);
+	init_symbol_table();//we need to move the symbol table initialization here, because it uses the perm part of the heap
+
+	outbuf = (char *) em_alloc_tmp(pHeap, OUTBUFDEFAULTSIZE);
+	outbuf_length = OUTBUFDEFAULTSIZE;
+	outbuf_index = 0;
+	//outbuf_init();
+
+	init_block(mem);
+	init_symbol_table(); // initialize symbol table moved to init()
+
+	mp_printf(&mp_plat_print, "current perm top %d\n",(uint32_t)pHeap->perm_top);
+	eigenmath_reset(self);
+	return MP_OBJ_FROM_PTR(self);
+}
+
+// run(self, input_str)
+static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	mp_check_self(mp_obj_is_str_or_bytes(input_str_obj));
+	//const char *str;
+	//size_t str_len;
+	GET_STR_DATA_LEN(input_str_obj, str, str_len);
+	//mp_printf(&mp_plat_print, "debug input str is %s",str); 
+	
+	//char *cmdBuffer = (char *)m_malloc(str_len+1);
+	char *cmdBuffer = (char *)em_alloc_temp(pHeap, str_len+1); // allocate memory for command buffer
+	if (cmdBuffer == NULL) {
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate memory for command"));
+    }
+	memcpy(cmdBuffer, str, str_len);
+	cmdBuffer[str_len] = '\0';
+	//mp_printf(&mp_plat_print, "debug input str is %s",cmdBuffer); 
+	
+	mp_obj_t result;
+	
+
+	//outbuf[0] = '\0';
+	run(cmdBuffer);
+	if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
+        //m_free(cmdBuffer);
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
+    }
+	result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
+	//m_free(cmdBuffer);
+
+	return result;
+
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+
+
+static mp_obj_t eigenmath_del(mp_obj_t self_in) {
+	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	eigen_heap_deinit(&self->heap); // deinitialize the hea
+	
+	return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
+
+
+static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
+	
+	em_begin_run(pHeap); // begin run on the heap
+		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
+	push_bignum(MPLUS, mint(0), mint(1));
+	outbuf_init();
+	zero = pop();
+	push_bignum(MPLUS, mint(1), mint(1));
+	one = pop();
+	push_bignum(MMINUS, mint(1), mint(1));
+	minusone = pop();
+	push_symbol(POWER);
+	push_integer(-1);
+	push_rational(1, 2);
+	list(3);
+	imaginaryunit = pop();
+		//mp_printf(&mp_plat_print, "before init script\n");
+	run_init_script();
+
+
+
+
+/*
+	for (int i = 0; i < block_count; i++) {
+		if (mem[i]) {
+			m_free(mem[i]);
+			mem[i] = NULL;
+		}
+	}
+	block_count = 0;
+	free_list = NULL;
+	
+	// clear stack
+	tos = 0;
+	
+	// clear symbol table
+	for (int i = 0; i < 27 * BUCKETSIZE; i++) {
+		binding[i] = NULL;
+		usrfunc[i] = NULL;
+	}
+	
+	// clear buf
+	outbuf_init();
+	
+	// triger run rebuild
+	zero = NULL;
+	one = NULL;
+	minusone = NULL;
+	imaginaryunit = NULL;
+*/
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
+
+mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (dest[0] == MP_OBJ_NULL && attr == MP_QSTR___del__) {
+        dest[0] = MP_OBJ_FROM_PTR(&eigenmath_del_obj);
+        dest[1] = self_in;
+    }else{
+		// For any other attribute, indicate that lookup should continue in the locals dict
+		dest[1] = MP_OBJ_SENTINEL;
+		return MP_OBJ_NULL;
+		}
+
+    return MP_OBJ_NULL; 
+}
+static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
+};
+static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
+
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    eigenmath_type,
+    MP_QSTR_EigenMath,
+    MP_TYPE_FLAG_NONE,
+    make_new, eigenmath_make_new,
+    attr, eigenmath_attr,           // attr handler before locals_dict
+    locals_dict, &eigenmath_locals_dict,
+    print, eigenmath_print
+);
+
+
+
+static const mp_rom_map_elem_t eigenmath_module_globals_table[] = {
+{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_eigenmath) },
+{ MP_ROM_QSTR(MP_QSTR_EigenMath), MP_ROM_PTR(&eigenmath_type) },
+};
+static MP_DEFINE_CONST_DICT(mp_module_eigenmath_globals, eigenmath_module_globals_table);
+
+const mp_obj_module_t eigenmath_user_cmodule = {
+.base = { &mp_type_module },
+.globals = (mp_obj_dict_t*)&mp_module_eigenmath_globals,
+};
+
+MP_REGISTER_MODULE(MP_QSTR_eigenmath, eigenmath_user_cmodule);
+
+
+struct atom *
+alloc_atom(void)
+{
+	struct atom *p;
+	if (free_count == 0) {
+		gc(); // gc first, then try to allocate again
+	}
+	if (free_count == 0){
+		tos = 0;
+		//gc(); // prep for next run
+		exitf("out of memory");
+	}
+		
+
+	p = free_list;
+	free_list = p->u.next;
+
+	free_count--;
+	alloc_count++;
+
+	return p;
+}
 void init_block(struct atom *mem){
 	struct atom *p;
+
+	//p = (struct atom *)em_alloc_perm(pheap, MAXBLOCKS*BLOCKSIZE*sizeof(struct atom)); // initialize memory blocks to NULL
 	p=mem;
 	for (int j = 0; j <MAXATOMS - 1; j++) {
 		mem[j].atomtype = FREEATOM;
@@ -952,27 +1166,37 @@ void init_block(struct atom *mem){
  // return the first block pointer
 }
 
-struct atom *
-alloc_atom(void)
-{
-	struct atom *p;
 
-	if (free_count == 0){
+
+/*
+void
+alloc_block(void)
+{
+	int i;
+	struct atom *p;
+	//mp_printf(&mp_plat_print, "debug in alloc_block"); 
+	if (block_count == MAXBLOCKS) {
 		tos = 0;
 		gc(); // prep for next run
-		exitf("out of atoms pool");
+		exitf("out of memory");
 	}
-		
 
-	p = free_list;
-	free_list = p->u.next;
+	p = alloc_mem(BLOCKSIZE * sizeof (struct atom));
 
-	free_count--;
-	alloc_count++;
+	mem[block_count++] = p;
 
-	return p;
+	for (i = 0; i < BLOCKSIZE - 1; i++) {
+		p[i].atomtype = FREEATOM;
+		p[i].u.next = p + i + 1;
+	}
+
+	p[i].atomtype = FREEATOM;
+	p[i].u.next = NULL;
+
+	free_list = p;
+	free_count = BLOCKSIZE;
 }
-
+*/
 struct atom *
 alloc_vector(int nrow)
 {
@@ -1019,13 +1243,30 @@ alloc_str(void)
 	string_count++;
 	return p;
 }
-
+void *
+alloc_mem_temp(int n)
+{
+	//void *p = m_malloc0(n);
+	void *p = em_alloc_tmp(pHeap, n); // allocate memory from the permanent heap
+	if (p == NULL){
+		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
+		longjmp(jmpbuf0, 1);
+	}
+		
+	return p;
+}
 void *
 alloc_mem(int n)
 {
-	void *p = e_malloc(n);
-	if (p == NULL)
-		stopf("alloc mem failed out of memory");
+	//void *p = m_malloc0(n);
+	void *p = em_alloc_perm(pHeap, n); // allocate memory from the permanent heap
+	if (p == NULL){
+		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Alloc memory failed"); // red
+		longjmp(jmpbuf0, 1);
+	}
+		
 	return p;
 }
 double
@@ -1060,7 +1301,7 @@ mscan(char *s)
 	int i, k, len;
 	uint32_t *a, *b, *t;
 	a = mint(0);
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 	if (len == 0)
 		return a;
 	k = len % 9;
@@ -1107,8 +1348,8 @@ mstr(uint32_t *u)
 	n = 1000 * (n / 1000 + 1);
 
 	if (n > len) {
-		if (buf)
-			e_free(buf);
+		//if (buf)
+			//m_free(buf);
 		buf = alloc_mem(n);
 		len = n;
 	}
@@ -1490,7 +1731,8 @@ mnew(int n)
 void
 mfree(uint32_t *u)
 {
-	e_free(u - 1);
+	//m_free(u - 1);
+	//gc_collect();
 	bignum_count--;
 }
 
@@ -5043,13 +5285,13 @@ eval_eigenvec(struct atom *p1)
 			if (fabs(p1->u.tensor->elem[n * i + j]->u.d - p1->u.tensor->elem[n * j + i]->u.d) > 1e-10)
 				stopf("eigenvec");
 
-	if (D)
-		e_free(D);
-	if (Q)
-		e_free(Q);
+	//if (D)
+	//	m_free(D);
+	//if (Q)
+	//	m_free(Q);
 
-	D = alloc_mem(n * n * sizeof (double));
-	Q = alloc_mem(n * n * sizeof (double));
+	D = alloc_mem_temp(n * n * sizeof (double));
+	Q = alloc_mem_temp(n * n * sizeof (double));
 
 	// initialize D
 
@@ -7293,7 +7535,7 @@ const char * const integral_tab_exp[] = {
 
 // log(a x) is transformed to log(a) + log(x)
 
-char *integral_tab_log[] = {
+const char * const integral_tab_log[] = {
 
 	"log(x)",
 	"x log(x) - x",
@@ -7340,7 +7582,7 @@ char *integral_tab_log[] = {
 	"1",
 };
 
-char *integral_tab_trig[] = {
+const char * const integral_tab_trig[] = {
 
 	"sin(a x)",
 	"-cos(a x) / a",
@@ -7599,7 +7841,7 @@ char *integral_tab_trig[] = {
 	"1",
 };
 
-char *integral_tab_power[] = {
+const char * const integral_tab_power[] = {
 
 	"a", // for forms c^d where both c and d are constant expressions
 	"a x",
@@ -7720,8 +7962,8 @@ char *integral_tab_power[] = {
 	"1",
 };
 
-char *integral_tab[] = {
-
+//char *integral_tab[] = {
+const char * const integral_tab[] ={
 	"a",
 	"a x",
 	"1",
@@ -7987,6 +8229,7 @@ char *integral_tab[] = {
 void
 eval_integral(struct atom *p1)
 {
+	mp_printf(&mp_plat_print, "integral: called");
 	int flag, i, n;
 	struct atom *X, *Y = NULL; // silence compiler
 
@@ -8177,17 +8420,17 @@ integral_classify(struct atom *p)
 }
 
 int
-integral_search(int h, struct atom *F, char **table, int n)
+integral_search(int h, struct atom *F, const char * const*table, int n)
 {
 	int i;
 	struct atom *C, *I;
 
 	for (i = 0; i < n; i += 3) {
 
-		scan1(table[i + 0]); // integrand
+		scan1((char *)table[i + 0]); // integrand
 		I = pop();
 
-		scan1(table[i + 2]); // condition
+		scan1((char *)table[i + 2]); // condition
 		C = pop();
 
 		if (integral_search_nib(h, F, I, C))
@@ -8199,7 +8442,7 @@ integral_search(int h, struct atom *F, char **table, int n)
 
 	tos = h; // pop all
 
-	scan1(table[i + 1]); // answer
+	scan1((char *)table[i + 1]); // answer
 	evalf();
 
 	return 1;
@@ -9279,7 +9522,8 @@ void
 expand_sum_factors(int h)
 {
 	int i, n;
-	struct atom *p1, *p2;
+	struct atom *p1=NULL;
+	struct atom *p2=NULL;
 
 	if (tos - h < 2)
 		return;
@@ -9705,13 +9949,13 @@ nroots(void)
 
 	n = tos - h; // number of coeffs on stack
 
-	if (cr)
-		e_free(cr);
-	if (ci)
-		e_free(ci);
+	//if (cr)
+	//	m_free(cr);
+	//if (ci)
+	//	m_free(ci);
 
-	cr = alloc_mem(n * sizeof (double));
-	ci = alloc_mem(n * sizeof (double));
+	cr = alloc_mem_temp(n * sizeof (double));
+	ci = alloc_mem_temp(n * sizeof (double));
 
 	// convert coeffs to floating point
 
@@ -12463,15 +12707,15 @@ read_file(char *filename)
 
 	n = (int) t;
 
-	buf = malloc(n + 1);
-
+	//buf = m_malloc0(n + 1);
+	buf =em_alloc_tmp(pHeap, n+1);
 	if (buf == NULL) {
 		close(fd);
 		return NULL;
 	}
 
 	if (read(fd, buf, n) != n) {
-		e_free(buf);
+		//m_free(buf);
 		close(fd);
 		return NULL;
 	}
@@ -12482,6 +12726,7 @@ read_file(char *filename)
 
 	return buf;
 }
+
 void
 eval_setq(struct atom *p1)
 {
@@ -13371,7 +13616,7 @@ eval_status(struct atom *p1)
 	snprintf(strbuf, STRBUFLEN, "max_eval_level %d\n", max_eval_level);
 	outbuf_puts(strbuf);
 
-	snprintf(strbuf, STRBUFLEN, "max_tos %d (%d%%)\n", max_tos, 100 * max_tos / STACKSIZE);
+	snprintf(strbuf, STRBUFLEN, "max_tos %d (%lu%%)\n", max_tos, 100 * max_tos / STACKSIZE);
 	outbuf_puts(strbuf);
 
 	printbuf(outbuf, BLACK);
@@ -15055,10 +15300,12 @@ factor_int(int n)
 #define BDLDAL 0xe29490 // BOX DRAW LIGHT DOWN AND LEFT
 #define BDLUAR 0xe29494 // BOX DRAW LIGHT UP AND RIGHT
 #define BDLUAL 0xe29498 // BOX DRAW LIGHT UP AND LEFT
-
+#ifndef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-
+#endif
 int fmt_level;
 int fmt_nrow;
 int fmt_ncol;
@@ -15091,9 +15338,9 @@ fmt(void)
 	m = 1000 * (n / 1000 + 1); // round up
 
 	if (m > fmt_buf_len) {
-		if (fmt_buf)
-			e_free(fmt_buf);
-		fmt_buf = alloc_mem(m);
+		//if (fmt_buf)
+		//	m_free(fmt_buf);
+		fmt_buf = alloc_mem_temp(m);
 		fmt_buf_len = m;
 	}
 
@@ -15723,7 +15970,7 @@ fmt_symbol(struct atom *p)
 
 #define NUM_SYMBOL_NAMES 49
 
-const char * const symbol_name_tab[NUM_SYMBOL_NAMES] = {
+char *symbol_name_tab[NUM_SYMBOL_NAMES] = {
 
 	"Alpha",
 	"Beta",
@@ -15778,7 +16025,7 @@ const char * const symbol_name_tab[NUM_SYMBOL_NAMES] = {
 	"hbar",
 };
 
-const int symbol_unicode_tab[NUM_SYMBOL_NAMES] = {
+int symbol_unicode_tab[NUM_SYMBOL_NAMES] = {
 
 	0xce91, // Alpha
 	0xce92, // Beta
@@ -15841,7 +16088,7 @@ fmt_symbol_fragment(char *s, int k)
 
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
 		t = symbol_name_tab[i];
-		n = (int) strlen(t);
+		n = (int) strlen((const char *)t);
 		if (strncmp(s + k, t, n) == 0)
 			break;
 	}
@@ -16396,7 +16643,7 @@ fmt_putw(uint32_t w)
 void
 gc(void)
 {
-	int i;
+	int i, j;
 	struct atom *p;
 
 	gc_count++;
@@ -16404,7 +16651,7 @@ gc(void)
 
 	// tag everything
 
-	for (i = 0; i < MAXATOMS;i++)
+	for (i = 0; i < MAXATOMS; i++)
 		mem[i].tag = 1;
 
 	// untag what's used
@@ -16428,42 +16675,46 @@ gc(void)
 	free_list = NULL;
 	free_count = 0;
 
-	for (i = 0; i < MAXATOMS;i++){
+	for (i = 0; i < MAXATOMS; i++)
+			p = mem[i];
 
-		p = mem[i];
-		if (p->tag == 0)
-			continue;
-		// still tagged so it's unused, put on free list
-		switch (p->atomtype) {
-		case KSYM:
-			e_free(p->u.ksym.name);
-			ksym_count--;
-			break;
-		case USYM:
-			e_free(p->u.usym.name);
-			usym_count--;
-			break;
-		case RATIONAL:
-			mfree(p->u.q.a);
-			mfree(p->u.q.b);
-			break;
-		case STR:
-			if (p->u.str)
-				e_free(p->u.str);
-			string_count--;
-			break;
-		case TENSOR:
-			e_free(p->u.tensor);
-			tensor_count--;
-			break;
-		default:
-			break; // FREEATOM, CONS, or DOUBLE
-		}
-		p->atomtype = FREEATOM;
-		p->u.next = free_list;
-		free_list = p;
-		free_count++;
-	}
+			if (p->tag == 0)
+				continue;
+
+			// still tagged so it's unused, put on free list
+
+			switch (p->atomtype) {
+			case KSYM:
+				//m_free(p->u.ksym.name);
+				ksym_count--;
+				break;
+			case USYM:
+				//m_free(p->u.usym.name);
+				usym_count--;
+				break;
+			case RATIONAL:
+				mfree(p->u.q.a);
+				mfree(p->u.q.b);
+				break;
+			case STR:
+				//if (p->u.str)
+					//m_free(p->u.str);
+				string_count--;
+				break;
+			case TENSOR:
+				//m_free(p->u.tensor);
+				tensor_count--;
+				break;
+			default:
+				break; // FREEATOM, CONS, or DOUBLE
+			}
+
+			p->atomtype = FREEATOM;
+			p->u.next = free_list;
+
+			free_list = p;
+			free_count++;
+		
 }
 
 void
@@ -16491,50 +16742,17 @@ untag(struct atom *p)
 		for (i = 0; i < p->u.tensor->nelem; i++)
 			untag(p->u.tensor->elem[i]);
 }
-struct atom *mem; // an array of pointers
-struct atom *free_list;
 
-int tos; // top of stack
 
-struct atom **stack;
 
-struct atom **symtab;
-struct atom **binding;
-struct atom **usrfunc;
 
-struct atom *zero;
-struct atom *one;
-struct atom *minusone;
-struct atom *imaginaryunit;
 
-int eval_level;
-int gc_level;
-int expanding;
-int drawing;
-int nonstop;
-int interrupt;
-jmp_buf jmpbuf0;
-jmp_buf jmpbuf1;
-char *trace1;
-char *trace2;
+//struct atom *stack[STACKSIZE];
 
-int alloc_count;
-int block_count;
-int free_count;
-int gc_count;
-int bignum_count;
-int ksym_count;
-int usym_count;
-int string_count;
-int tensor_count;
-int max_eval_level;
-int max_tos;
+//struct atom *symtab[27 * BUCKETSIZE];
+//struct atom *binding[27 * BUCKETSIZE];
+//struct atom *usrfunc[27 * BUCKETSIZE];
 
-char strbuf[STRBUFLEN];
-
-char *outbuf;
-int outbuf_index;
-int outbuf_length;
 /*
 int
 main(int argc, char *argv[])
@@ -16552,26 +16770,16 @@ run_infile(char *infile)
 	char *buf;
 	buf = read_file(infile);
 	if (buf == NULL) {
+		mp_printf(&mp_plat_print, "\x1b[37;41mcannot read %s\x1b[0m", infile); // red
 		//fprintf(stderr, "cannot read %s\n", infile);
-		mp_printf(&mp_plat_print, "cannot read %s\n", infile);
+		longjmp(jmpbuf0, 1);
 		//exit(1);
-		stopf("cannot read %s", infile);
 	}
 	run(buf);
-	e_free(buf);
+	//m_free(buf);
 }
 
-void
-run_stdin(void)
-{
-	static char inbuf[1000];
-	for (;;) {
-		fputs("? ", stdout);
-		fflush(stdout);
-		fgets(inbuf, sizeof inbuf, stdin);
-		run(inbuf);
-	}
-}
+
 
 void
 display(void)
@@ -16584,16 +16792,18 @@ printbuf(char *s, int color)
 {
 	//fputs(s, stdout);
 	switch (color) {
-		case 0:
-			mp_printf(&mp_plat_print, "\x1b[37;40m%s\x1b[0m", s);//black
-			break;
-		case 1:
-			mp_printf(&mp_plat_print, "\x1b[37;44m%s\x1b[0m", s); // blue
-			break;
-		case 2:
-			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", s); // red
-			break;
-		}
+	case 0:
+		mp_printf(&mp_plat_print, "\x1b[37;40m%s\x1b[0m", s);//black
+		break;
+	case 1:
+		mp_printf(&mp_plat_print, "\x1b[37;44m%s\x1b[0m", s); // blue
+		break;
+	case 2:
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", s); // red
+		break;
+	}
+	//mp_printf(&mp_plat_print, "message");
+
 }
 
 void
@@ -16727,12 +16937,32 @@ outbuf_init(void)
 	outbuf_puts(""); // init outbuf as empty string
 }
 
+void *gc_safe_realloc(void *old_ptr, size_t old_size, size_t new_size) {
+    //void *new_ptr = m_malloc0(new_size);
+	void *new_ptr=em_alloc_tmp(pHeap, new_size);
+    if (!new_ptr) {
+        // optional: raise error or return NULL
+		//m_free(old_ptr); // free old pointer if realloc fails
+        return NULL;
+    }
+
+    if (old_ptr && old_size > 0) {
+        // copy old data to new block
+        size_t copy_size = old_size < new_size ? old_size : new_size;
+        memcpy(new_ptr, old_ptr, copy_size);
+        //m_free(old_ptr);
+    }
+
+    return new_ptr;
+}
+
+
 void
 outbuf_puts(char *s)
 {
 	int len, m;
 
-	len = (int) strlen(s);
+	len = (int) strlen((const char *)s);
 
 	// Let outbuf_index + len == 1000
 
@@ -16741,9 +16971,14 @@ outbuf_puts(char *s)
 	m = 1000 * ((outbuf_index + len) / 1000 + 1); // m is a multiple of 1000
 
 	if (m > outbuf_length) {
-		outbuf = e_realloc(outbuf, m);
-		if (outbuf == NULL)
-			stopf("outbuf_puts: realloc failed");
+		//outbuf = realloc(outbuf, m);
+		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
+		if (outbuf == NULL){
+			//exit(1);
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
+			longjmp(jmpbuf0, 1);
+		}
+			
 		outbuf_length = m;
 	}
 
@@ -16764,10 +16999,13 @@ outbuf_putc(int c)
 	m = 1000 * ((outbuf_index + 1) / 1000 + 1); // m is a multiple of 1000
 
 	if (m > outbuf_length) {
-		outbuf = e_realloc(outbuf, m);
-		if (outbuf == NULL)
+		//outbuf = realloc(outbuf, m);
+		outbuf =gc_safe_realloc(outbuf, outbuf_length, m);
+		if (outbuf == NULL){
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "Out buff is NULL"); // red
+			longjmp(jmpbuf0, 1);
 			//exit(1);
-			stopf("outbuf_putc: realloc failed");
+		}		
 		outbuf_length = m;
 	}
 
@@ -17069,7 +17307,11 @@ run(char *buf)
 {
 	if (setjmp(jmpbuf0))
 		return;
-
+	em_begin_run();
+	//alloc outbuf
+	outbuf = (char *) em_alloc_tmp(pHeap, OUTBUFDEFAULTSIZE);
+	outbuf_length = OUTBUFDEFAULTSIZE;
+	outbuf_index = 0;
 	tos = 0;
 	interrupt = 0;
 	eval_level = 0;
@@ -17077,10 +17319,15 @@ run(char *buf)
 	expanding = 1;
 	drawing = 0;
 	nonstop = 0;
-
+/*
 	if (zero == NULL) {
-		init_symbol_table();
+		//mp_printf(&mp_plat_print, "debug zero == NULL\n");
+		
+		init_symbol_table(); // initialize symbol table moved to init()
+		
+		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
 		push_bignum(MPLUS, mint(0), mint(1));
+		
 		zero = pop();
 		push_bignum(MPLUS, mint(1), mint(1));
 		one = pop();
@@ -17091,9 +17338,11 @@ run(char *buf)
 		push_rational(1, 2);
 		list(3);
 		imaginaryunit = pop();
+		//mp_printf(&mp_plat_print, "before init script\n");
 		run_init_script();
+		
 	}
-
+*/
 	run_buf(buf);
 }
 
@@ -17180,7 +17429,8 @@ const char *init_script =
 void
 run_init_script(void)
 {
-	run_buf(init_script);
+	mp_printf(&mp_plat_print, "%s", init_script); 
+	//run_buf((char *)init_script);
 }
 
 void
@@ -17188,7 +17438,6 @@ stopf(char *s)
 {
 	if (nonstop)
 		longjmp(jmpbuf1, 1);
-	
 	print_trace(RED);
 	snprintf(strbuf, STRBUFLEN, "Stop: %s\n", s);
 	printbuf(strbuf, RED);
@@ -17467,7 +17716,7 @@ scan_factor(void)
 void
 scan_symbol(void)
 {
-	if (scan_mode && strlen(token_buf) == 1)
+	if (scan_mode && strlen((const char *)token_buf) == 1)
 		switch (token_buf[0]) {
 		case 'a':
 			push_symbol(SA);
@@ -17624,12 +17873,12 @@ get_token_nib(void)
 
 	// number?
 
-	if (isdigit(*scan_str) || *scan_str == '.') {
-		while (isdigit(*scan_str))
+	if (isdigit((unsigned char)*scan_str) || *scan_str == '.') {
+		while (isdigit((unsigned char)*scan_str))
 			scan_str++;
 		if (*scan_str == '.') {
 			scan_str++;
-			while (isdigit(*scan_str))
+			while (isdigit((unsigned char)*scan_str))
 				scan_str++;
 			if (token_str + 1 == scan_str)
 				scan_error("expected decimal digit"); // only a decimal point
@@ -17642,8 +17891,8 @@ get_token_nib(void)
 
 	// symbol?
 
-	if (isalpha(*scan_str)) {
-		while (isalnum(*scan_str))
+	if (isalpha((unsigned char)*scan_str)) {
+		while (isalnum((unsigned char)*scan_str))
 			scan_str++;
 		if (*scan_str == '(')
 			token = T_FUNCTION;
@@ -17706,9 +17955,9 @@ update_token_buf(char *a, char *b)
 	m = 1000 * (n / 1000 + 1); // m is a multiple of 1000
 
 	if (m > token_buf_len) {
-		if (token_buf)
-			e_free(token_buf);
-		token_buf = alloc_mem(m);
+		//if (token_buf)
+			//m_free(token_buf);
+		token_buf = alloc_mem_temp(m);
 		token_buf_len = m;
 	}
 
@@ -17975,13 +18224,20 @@ void
 push_string(char *s)
 {
 	struct atom *p;
+	char *ns;
 	p = alloc_str();
-	//s = strdup(s);
-	char *ns = e_malloc(strlen(s) + 1);
-	if (ns == NULL)
-		stopf("push_string memory alloc error");
+	//ns = m_malloc0(strlen(s) + 1);
+	ns = em_alloc_tmp(pHeap, strlen(s) + 1); // allocate memory for string
+	
+	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
-
+	//s = strdup(s);
+	if (ns == NULL){
+		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "in push_string string is NULL"); // red
+		longjmp(jmpbuf0, 1);
+	}
+		
 	p->u.str = ns;
 	push(p);
 }
@@ -18006,10 +18262,10 @@ lookup(char *s)
 {
 	int i, k;
 	struct atom *p;
-
-	if (isupper(*s))
+	char *ns;
+	if (isupper((unsigned char)*s))
 		k = BUCKETSIZE * (*s - 'A');
-	else if (islower(*s))
+	else if (islower((unsigned char)*s))
 		k = BUCKETSIZE * (*s - 'a');
 	else
 		k = BUCKETSIZE * 26;
@@ -18026,13 +18282,17 @@ lookup(char *s)
 		stopf("symbol table full");
 
 	p = alloc_atom();
-	//s = strdup(s);
-	char *ns = e_malloc(strlen(s) + 1);
-	if (ns == NULL)
-		stopf("lookup memory alloc error");
+	//ns = m_malloc0(strlen(s) + 1);
+	ns=em_alloc_perm(pHeap, strlen(s) + 1); // allocate memory for string
+	//strcpy(ns, s);
 	memcpy(ns, s, strlen(s) + 1);
-	//if (s == NULL)
-	//	exit(1);
+	//s = strdup(s);
+	if (ns == NULL){
+		//exit(1);
+		mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "in lookup string is NULL"); // red
+		longjmp(jmpbuf0, 1);
+	}
+		
 	p->atomtype = USYM;
 	p->u.usym.name = ns;
 	p->u.usym.index = k + i;
@@ -18054,12 +18314,38 @@ printname(struct atom *p)
 }
 
 void
-set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
-{
+//set_symbol(struct atom *p1, struct atom *p2, struct atom *p3)
+void set_symbol(struct atom *sym, struct atom *value, struct atom *attr){
+	if (!isusersymbol(sym))
+        stopf("set_symbol symbol error");
+
+    /* ---------- upgrade string buffer ---------- */
+    if (isstr(value) && value->u.str && in_tmp(value->u.str)) {
+        size_t len = strlen(value->u.str) + 1;
+        char *perm_buf = em_alloc_perm(&eigen_heap, len);
+        memcpy(perm_buf, value->u.str, len);
+        value->u.str = perm_buf;
+    }
+
+    /* ---------- upgrade tensor buffer ---------- */
+    if (istensor(value) && value->u.tensor && in_tmp(value->u.tensor)) {
+        size_t bytes = tensor_bytes(value);      /* helper: returns byte size */
+        void *perm_buf = em_alloc_perm(&eigen_heap, bytes);
+        memcpy(perm_buf, value->u.tensor, bytes);
+        value->u.tensor = perm_buf;
+    }
+
+    /*  Add similar blocks for other object types with tmp‑allocated payload */
+
+    /* ---------- bind symbol ---------- */
+    binding[sym->u.usym.index]  = value;
+    usrfunc[sym->u.usym.index]  = attr;
+	/*
 	if (!isusersymbol(p1))
-		stopf("symbol error");
+		stopf("set_symbol symbol error");
 	binding[p1->u.usym.index] = p2;
 	usrfunc[p1->u.usym.index] = p3;
+	*/
 }
 
 struct atom *
@@ -18067,7 +18353,7 @@ get_binding(struct atom *p1)
 {
 	struct atom *p2;
 	if (!isusersymbol(p1))
-		stopf("symbol error");
+		stopf("get binding symbol error");
 	p2 = binding[p1->u.usym.index];
 	if (p2 == NULL || p2 == symbol(NIL))
 		p2 = p1; // symbol binds to itself
@@ -18078,7 +18364,7 @@ struct atom *
 get_usrfunc(struct atom *p)
 {
 	if (!isusersymbol(p))
-		stopf("symbol error");
+		stopf("get usrfunc symbol error");
 	p = usrfunc[p->u.usym.index];
 	if (p == NULL)
 		p = symbol(NIL);
@@ -18091,131 +18377,112 @@ typedef struct{
 	void (*func)(struct atom *);
 } se; 
 const se stab[] = {
-
 	{ "abs",		ABS,		eval_abs		},
 	{ "adj",		ADJ,		eval_adj		},
 	{ "and",		AND,		eval_and		},
 	{ "arccos",		ARCCOS,		eval_arccos		},
-	{ "arccosh",		ARCCOSH,	eval_arccosh		},
+	{ "arccosh",	ARCCOSH,	eval_arccosh	},
 	{ "arcsin",		ARCSIN,		eval_arcsin		},
-	{ "arcsinh",		ARCSINH,	eval_arcsinh		},
+	{ "arcsinh",	ARCSINH,	eval_arcsinh	},
 	{ "arctan",		ARCTAN,		eval_arctan		},
-	{ "arctanh",		ARCTANH,	eval_arctanh		},
+	{ "arctanh",	ARCTANH,	eval_arctanh	},
 	{ "arg",		ARG,		eval_arg		},
-
-	{ "binding",		BINDING,	eval_binding		},
-
+	{ "binding",	BINDING,	eval_binding	},
 	{ "C",			C_UPPER,	NULL			},
 	{ "c",			C_LOWER,	NULL			},
-	{ "ceiling",		CEILING,	eval_ceiling		},
+	{ "ceiling",	CEILING,	eval_ceiling	},
 	{ "check",		CHECK,		eval_check		},
-	{ "circexp",		CIRCEXP,	eval_expform		},
+	{ "circexp",	CIRCEXP,	eval_expform	},
 	{ "clear",		CLEAR,		eval_clear		},
 	{ "clock",		CLOCK,		eval_clock		},
-	{ "cofactor",		COFACTOR,	eval_cofactor		},
+	{ "cofactor",	COFACTOR,	eval_cofactor	},
 	{ "conj",		CONJ,		eval_conj		},
-	{ "contract",		CONTRACT,	eval_contract		},
+	{ "contract",	CONTRACT,	eval_contract	},
 	{ "cos",		COS,		eval_cos		},
 	{ "cosh",		COSH,		eval_cosh		},
-
 	{ "D",			D_UPPER,	NULL			},
 	{ "d",			D_LOWER,	NULL			},
 	{ "defint",		DEFINT,		eval_defint		},
-	{ "denominator",	DENOMINATOR,	eval_denominator	},
-	{ "derivative",		DERIVATIVE,	eval_derivative		},
+	{ "denominator",DENOMINATOR,eval_denominator},
+	{ "derivative",	DERIVATIVE,	eval_derivative	},
 	{ "det",		DET,		eval_det		},
 	{ "dim",		DIM,		eval_dim		},
-	{ "do",			DO,		eval_do			},
+	{ "do",			DO,			eval_do			},
 	{ "dot",		DOT,		eval_inner		},
 	{ "draw",		DRAW,		eval_draw		},
-
-	{ "eigenvec",		EIGENVEC,	eval_eigenvec		},
+	{ "eigenvec",	EIGENVEC,	eval_eigenvec	},
 	{ "erf",		ERF,		eval_erf		},
 	{ "erfc",		ERFC,		eval_erfc		},
 	{ "eval",		EVAL,		eval_eval		},
 	{ "exit",		EXIT,		eval_exit		},
 	{ "exp",		EXP,		eval_exp		},
 	{ "expcos",		EXPCOS,		eval_expcos		},
-	{ "expcosh",		EXPCOSH,	eval_expcosh		},
-	{ "expform",		EXPFORM,	eval_expform		},
+	{ "expcosh",	EXPCOSH,	eval_expcosh	},
+	{ "expform",	EXPFORM,	eval_expform	},
 	{ "expsin",		EXPSIN,		eval_expsin		},
-	{ "expsinh",		EXPSINH,	eval_expsinh		},
+	{ "expsinh",	EXPSINH,	eval_expsinh	},
 	{ "exptan",		EXPTAN,		eval_exptan		},
-	{ "exptanh",		EXPTANH,	eval_exptanh		},
-
-	{ "factorial",		FACTORIAL,	eval_factorial		},
+	{ "exptanh",	EXPTANH,	eval_exptanh	},
+	{ "factorial",	FACTORIAL,	eval_factorial	},
 	{ "float",		FLOATF,		eval_float		},
 	{ "floor",		FLOOR,		eval_floor		},
 	{ "for",		FOR,		eval_for		},
-
 	{ "H",			H_UPPER,	NULL			},
 	{ "h",			H_LOWER,	NULL			},
-	{ "hadamard",		HADAMARD,	eval_hadamard		},
-
+	{ "hadamard",	HADAMARD,	eval_hadamard	},
 	{ "I",			I_UPPER,	NULL			},
 	{ "i",			I_LOWER,	NULL			},
 	{ "imag",		IMAG,		eval_imag		},
-	{ "infixform",		INFIXFORM,	eval_infixform		},
+	{ "infixform",	INFIXFORM,	eval_infixform	},
 	{ "inner",		INNER,		eval_inner		},
-	{ "integral",		INTEGRAL,	eval_integral		},
+	{ "integral",	INTEGRAL,	eval_integral	},
 	{ "inv",		INV,		eval_inv		},
-
 	{ "J",			J_UPPER,	NULL			},
 	{ "j",			J_LOWER,	NULL			},
-
-	{ "kronecker",		KRONECKER,	eval_kronecker		},
-
+	{ "kronecker",	KRONECKER,	eval_kronecker	},
 	{ "last",		LAST,		NULL			},
 	{ "log",		LOG,		eval_log		},
-
 	{ "mag",		MAG,		eval_mag		},
 	{ "minor",		MINOR,		eval_minor		},
-	{ "minormatrix",	MINORMATRIX,	eval_minormatrix	},
+	{ "minormatrix",MINORMATRIX,eval_minormatrix},
 	{ "mod",		MOD,		eval_mod		},
-
 	{ "nil",		NIL,		eval_nil		},
-	{ "noexpand",		NOEXPAND,	eval_noexpand		},
+	{ "noexpand",	NOEXPAND,	eval_noexpand	},
 	{ "not",		NOT,		eval_not		},
 	{ "nroots",		NROOTS,		eval_nroots		},
 	{ "number",		NUMBER,		eval_number		},
-	{ "numerator",		NUMERATOR,	eval_numerator		},
-
-	{ "or",			OR,		eval_or			},
+	{ "numerator",	NUMERATOR,	eval_numerator	},
+	{ "or",			OR,		eval_or				},
 	{ "outer",		OUTER,		eval_outer		},
-
 	{ "p",			P_LOWER,	NULL			},
 	{ "P",			P_UPPER,	NULL			},
-	{ "pi",			PI,		NULL			},
+	{ "pi",			PI,		NULL				},
 	{ "polar",		POLAR,		eval_polar		},
-	{ "prefixform",		PREFIXFORM,	eval_prefixform		},
+	{ "prefixform",	PREFIXFORM,	eval_prefixform	},
 	{ "print",		PRINT,		eval_print		},
-	{ "product",		PRODUCT,	eval_product		},
-
+	{ "product",	PRODUCT,	eval_product	},
 	{ "Q",			Q_UPPER,	NULL			},
 	{ "q",			Q_LOWER,	NULL			},
 	{ "quote",		QUOTE,		eval_quote		},
-
 	{ "R",			R_UPPER,	NULL			},
 	{ "r",			R_LOWER,	NULL			},
 	{ "rank",		RANK,		eval_rank		},
-	{ "rationalize",	RATIONALIZE,	eval_rationalize	},
+	{ "rationalize",RATIONALIZE,eval_rationalize},
 	{ "real",		REAL,		eval_real		},
 	{ "rect",		RECTF,		eval_rect		},
 	{ "roots",		ROOTS,		eval_roots		},
 	{ "rotate",		ROTATE,		eval_rotate		},
 	{ "run",		RUN,		eval_run		},
-
 	{ "S",			S_UPPER,	NULL			},
 	{ "s",			S_LOWER,	NULL			},
 	{ "sgn",		SGN,		eval_sgn		},
-	{ "simplify",		SIMPLIFY,	eval_simplify		},
+	{ "simplify",	SIMPLIFY,	eval_simplify	},
 	{ "sin",		SIN,		eval_sin		},
 	{ "sinh",		SINH,		eval_sinh		},
 	{ "sqrt",		SQRT,		eval_sqrt		},
 	{ "status",		STATUS,		eval_status		},
 	{ "stop",		STOP,		eval_stop		},
 	{ "sum",		SUM,		eval_sum		},
-
 	{ "T",			T_UPPER,	NULL			},
 	{ "t",			T_LOWER,	NULL			},
 	{ "tan",		TAN,		eval_tan		},
@@ -18228,38 +18495,31 @@ const se stab[] = {
 	{ "testle",		TESTLE,		eval_testle		},
 	{ "testlt",		TESTLT,		eval_testlt		},
 	{ "trace",		TRACE,		NULL			},
-	{ "transpose",		TRANSPOSE,	eval_transpose		},
+	{ "transpose",	TRANSPOSE,	eval_transpose	},
 	{ "tty",		TTY,		NULL			},
-
 	{ "U",			U_UPPER,	NULL			},
 	{ "u",			U_LOWER,	NULL			},
 	{ "unit",		UNIT,		eval_unit		},
-
 	{ "V",			V_UPPER,	NULL			},
 	{ "v",			V_LOWER,	NULL			},
-
 	{ "W",			W_UPPER,	NULL			},
 	{ "w",			W_LOWER,	NULL			},
-
 	{ "X",			X_UPPER,	NULL			},
 	{ "x",			X_LOWER,	NULL			},
-
 	{ "Y",			Y_UPPER,	NULL			},
 	{ "y",			Y_LOWER,	NULL			},
-
 	{ "Z",			Z_UPPER,	NULL			},
 	{ "z",			Z_LOWER,	NULL			},
 	{ "zero",		ZERO,		eval_zero		},
-
 	{ "+",			ADD,		eval_add		},
-	{ "*",			MULTIPLY,	eval_multiply		},
+	{ "*",			MULTIPLY,	eval_multiply	},
 	{ "^",			POWER,		eval_power		},
 	{ "[",			INDEX,		eval_index		},
 	{ "=",			SETQ,		eval_setq		},
 	{ "$e",			EXP1,		NULL			},
-	{ "$a",			SA,		NULL			},
-	{ "$b",			SB,		NULL			},
-	{ "$x",			SX,		NULL			},
+	{ "$a",			SA,		NULL				},
+	{ "$b",			SB,		NULL				},
+	{ "$x",			SX,		NULL				},
 	{ "$1",			ARG1,		NULL			},
 	{ "$2",			ARG2,		NULL			},
 	{ "$3",			ARG3,		NULL			},
@@ -18284,15 +18544,24 @@ init_symbol_table(void)
 		usrfunc[i] = NULL;
 	}
 
-	n = sizeof stab / sizeof (se);
-
+	n = sizeof (stab) / sizeof (se);
+	//mp_printf(&mp_plat_print, "n is %d", n); // 
 	for (i = 0; i < n; i++) {
 		p = alloc_atom();
-		s = e_malloc(strlen(stab[i].str) + 1);
-		if (s == NULL)
-			stopf("symbol table init error");
-		memcpy(s, stab[i].str, strlen(stab[i].str) + 1);	
-		
+		//s = strdup(stab[i].str);
+		//mp_printf(&mp_plat_print, "%s\n", stab[i].str); //
+		//mp_printf(&mp_plat_print, "%d\n", strlen(stab[i].str) + 1); //
+		//s = m_malloc(strlen(stab[i].str) + 1);
+		s =em_alloc_perm(pheap,strlen(stab[i].str) + 1); // allocate memory for string
+		//strcpy(s, stab[i].str);
+		memcpy(s, stab[i].str, strlen(stab[i].str) + 1);
+
+		if (s == NULL){
+			//exit(1);
+			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", "debug in init_symbol_table string is NULL"); // red
+			longjmp(jmpbuf0, 1);
+		}
+			
 		if (stab[i].func) {
 			p->atomtype = KSYM;
 			p->u.ksym.name = s;
@@ -18306,4 +18575,5 @@ init_symbol_table(void)
 		}
 		symtab[stab[i].index] = p;
 	}
+	//mp_printf(&mp_plat_print, "");
 }
