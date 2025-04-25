@@ -18190,8 +18190,9 @@ struct atom *
 get_binding(struct atom *p1)
 {
 	struct atom *p2;
-	if (!isusersymbol(p1))
+	if (!isusersymbol(p1)){
 		stopf("symbol error");
+	}
 	p2 = binding[p1->u.usym.index];
 	if (p2 == NULL || p2 == symbol(NIL)){
 		p2 = p1; // symbol binds to itself
@@ -18202,8 +18203,9 @@ get_binding(struct atom *p1)
 struct atom *
 get_usrfunc(struct atom *p)
 {
-	if (!isusersymbol(p))
+	if (!isusersymbol(p)){
 		stopf("symbol error");
+	}
 	p = usrfunc[p->u.usym.index];
 	if (p == NULL){
 		p = symbol(NIL);
