@@ -88,7 +88,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
 static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	eigen_heap_deinit(&self->heap); // deinitialize the hea
+	m_free(&self->pHeap); // deinitialize the hea
 	
 	return mp_const_none;
 }
@@ -97,22 +97,6 @@ static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
 	
-	em_begin_run(pHeap); // begin run on the heap
-		//mp_printf(&mp_plat_print, "debug symbol_table inited\n");
-	push_bignum(MPLUS, mint(0), mint(1));
-	outbuf_init();
-	zero = pop();
-	push_bignum(MPLUS, mint(1), mint(1));
-	one = pop();
-	push_bignum(MMINUS, mint(1), mint(1));
-	minusone = pop();
-	push_symbol(POWER);
-	push_integer(-1);
-	push_rational(1, 2);
-	list(3);
-	imaginaryunit = pop();
-		//mp_printf(&mp_plat_print, "before init script\n");
-	run_init_script();
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
