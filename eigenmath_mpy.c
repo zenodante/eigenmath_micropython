@@ -54,32 +54,12 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 
 static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-	mp_check_self(mp_obj_is_str_or_bytes(input_str_obj));
-	//const char *str;
-	//size_t str_len;
-	GET_STR_DATA_LEN(input_str_obj, str, str_len);
-	//mp_printf(&mp_plat_print, "debug input str is %s",str); 
-	
-	//char *cmdBuffer = (char *)m_malloc(str_len+1);
-	char *cmdBuffer = (char *)m_malloc(pHeap, str_len+1); // allocate memory for command buffer
-	if (cmdBuffer == NULL) {
-        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to allocate memory for command"));
-    }
-	memcpy(cmdBuffer, str, str_len);
-	cmdBuffer[str_len] = '\0';
-	//mp_printf(&mp_plat_print, "debug input str is %s",cmdBuffer); 
-	
-	//mp_obj_t result;
-	
+	size_t len;
+    const char *buf = mp_obj_str_get_data(input_str_obj, &len);
 
-	//outbuf[0] = '\0';
-	run(cmdBuffer);
-	//if (outbuf_index == 0 || strlen((const char *)outbuf) == 0) {
-        //m_free(cmdBuffer);
-    //    mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Eigenmath execution failed"));
-    //}
-	//result = mp_obj_new_str(outbuf, strlen((const char *)outbuf));
-	//m_free(cmdBuffer);
+	//GET_STR_DATA_LEN(input_str_obj, str, str_len);
+	run((char *)buf);
+
 
 	return mp_const_none;
 
