@@ -1,6 +1,6 @@
 # eigenmath port for micropython
 
-![PicoCalc screenshoot](./imgs/screen_143357.bmp)
+![PicoCalc screenshoot](./imgs/screenshot.jpg)
 ## Build Instructions
 eigenmath port for micropython, for example, here is the cmake commond for rp2 port.
 
@@ -15,3 +15,5 @@ cmake .. -G "Unix Makefiles" \
 RPI_PICO2 or RPI_PICO2_W recommonded!
 
 
+## Credits
+Eigenmath https://github.com/georgeweigt/eigenmath
