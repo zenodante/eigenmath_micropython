@@ -6425,6 +6425,7 @@ print_infixform(struct atom *p)
 	outbuf_init();
 	infixform_expr(p);
 	outbuf_puts("\n");
+	outbuf_puts("\0");
 	printbuf(outbuf, BLACK);
 }
 
@@ -15139,7 +15140,6 @@ fmt(void)
 	}
 
 	fmt_putw('\n'); // blank line after result
-
 	printbuf(outbuf, BLACK);
 }
 
@@ -17254,6 +17254,7 @@ print_trace(int color)
 }
 
 const char *init_script =
+"tty = 1\n"
 "i = sqrt(-1)\n"
 "grad(f) = d(f,(x,y,z))\n"
 "cross(a,b) = (dot(a[2],b[3])-dot(a[3],b[2]),dot(a[3],b[1])-dot(a[1],b[3]),dot(a[1],b[2])-dot(a[2],b[1]))\n"
