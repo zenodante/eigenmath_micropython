@@ -32,17 +32,22 @@ static void eigenmath_print(const mp_print_t *print, mp_obj_t self_in, mp_print_
 static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 	size_t n_args, size_t n_kw,
 	const mp_obj_t *args) {
+
 	mp_arg_check_num(n_args, n_kw, 1, 1, false);
-	
+	mp_obj_eigenmath_t *self = mp_obj_malloc(mp_obj_eigenmath_t, type);
 	self->base.type = type;
     self->heapSize = mp_obj_get_int(args[0]); // 350 * 1024; // 350KB
+    //mp_printf(&mp_plat_print,"heapSize = %d\n", self->heapSize);
 
-    self->pHeap = m_malloc(self->heapSize);
+    self->pHeap = (uint8_t *)m_malloc(self->heapSize);
+
+    //mp_printf(&mp_plat_print,"ptemp = %x\n", (uint32_t)(ptemp));
+    //mp_printf(&mp_plat_print,"self->pHeap = %x\n", (uint32_t)(self->pHeap));
 	if (self->pHeap == NULL){
 		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
 		return MP_OBJ_NULL;
-	}; // initialize heap with 300000 bytes
-	//pHeap = &self->heap; // set global heap pointer
+	} 
+
 
     eigenmath_init(self->pHeap,self->heapSize);
 

@@ -920,19 +920,21 @@ void init_symbol_table(void);
 void eigenmath_init(uint8_t *pHeap,size_t heapSize){
 	eheap_init((void *)pHeap, heapSize);
 	uint32_t sizeOfpAtom = sizeof(struct atom *);
+	uint32_t sizeOfAtom = sizeof(struct atom);
 	//init atom pool
-	MAXATOMS=((heapSize/sizeOfpAtom)*4)/10;
+	MAXATOMS=((heapSize/sizeOfAtom)*4)/10;
 	STACKSIZE=MAXATOMS/12;
+	//mp_printf(&mp_plat_print,"heapsize=%d,mem size = %d\n", heapSize,(uint32_t)(sizeof (struct atom) * MAXATOMS));
 	mem = e_malloc(sizeof (struct atom) * MAXATOMS);
 	if (mem == NULL) {
-		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
+		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize mem"));
 		return;
 	}
 	init_block(mem);
-	stack = (struct atom **)e_malloc(pHeap, STACKSIZE * sizeOfpAtom);
-	symtab = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
-	binding = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
-	usrfunc = (struct atom **)e_malloc(pHeap, (27 * BUCKETSIZE) * sizeOfpAtom);
+	stack = (struct atom **)e_malloc(STACKSIZE * sizeOfpAtom);
+	symtab = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	binding = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	usrfunc = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
 	if (stack == NULL || symtab == NULL || binding == NULL || usrfunc == NULL) {
 		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize fixed ram area"));
 		return;
@@ -942,11 +944,11 @@ void eigenmath_init(uint8_t *pHeap,size_t heapSize){
 
 
 void init_block(struct atom *mem){
-	struct atom *p;
-	p=mem;
+	//struct atom *p;
+	//p=mem;
 	for (int j = 0; j <MAXATOMS - 1; j++) {
 		mem[j].atomtype = FREEATOM;
-		mem[j].u.next = mem [j + 1];
+		mem[j].u.next = &mem [j + 1];
 	}
 	mem[MAXATOMS - 1].atomtype = FREEATOM;
 	mem[MAXATOMS - 1].u.next = NULL;
@@ -9283,7 +9285,8 @@ void
 expand_sum_factors(int h)
 {
 	int i, n;
-	struct atom *p1, *p2;
+	struct atom *p1=NULL;
+	struct atom *p2=NULL;
 
 	if (tos - h < 2)
 		return;
@@ -13378,7 +13381,7 @@ eval_status(struct atom *p1)
 	snprintf(strbuf, STRBUFLEN, "max_eval_level %d\n", max_eval_level);
 	outbuf_puts(strbuf);
 
-	snprintf(strbuf, STRBUFLEN, "max_tos %d (%d%%)\n", max_tos, 100 * max_tos / STACKSIZE);
+	snprintf(strbuf, STRBUFLEN, "max_tos %d (%ld%%)\n", max_tos, (int32_t)(100 * max_tos / STACKSIZE));
 	outbuf_puts(strbuf);
 
 	printbuf(outbuf, BLACK);
@@ -15077,8 +15080,8 @@ factor_int(int n)
 #define BDLUAR    0xC0   /* └ */
 #define BDLUAL    0xD9   /* ┘ */
 
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
+//#define MAX(a,b) ((a) > (b) ? (a) : (b))
+//#define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 int fmt_level;
 int fmt_nrow;
@@ -15116,7 +15119,7 @@ fmt(void)
 			e_free(fmt_buf);
 		fmt_buf = alloc_mem(m);
 		if (!fmt_buf) {
-			stopf("fmt: out of memory allocating %d bytes", m);
+			stopf("fmt: out of memory allocating %d bytes");
 		}
 		fmt_buf_len = m;
 	}
@@ -15872,7 +15875,7 @@ fmt_symbol_fragment(char *s, int k)
 	char *t;
 
 	for (i = 0; i < NUM_SYMBOL_NAMES; i++) {
-		t = (char)symbol_name_tab[i];
+		t = (char *)symbol_name_tab[i];
 		n = (int) strlen((const char *)t);
 		if (strncmp(s + k, t, n) == 0){
 			break;
@@ -16478,7 +16481,7 @@ gc(void)
 
 	for (i = 0; i < MAXATOMS;i++){
 
-		p = mem[i];
+		p = &mem[i];
 		if (p->tag == 0){
 			continue;
 		}
@@ -16609,7 +16612,7 @@ run_infile(char *infile)
 		//fprintf(stderr, "cannot read %s\n", infile);
 		mp_printf(&mp_plat_print, "cannot read %s\n", infile);
 		//exit(1);
-		stopf("cannot read %s", infile);
+		stopf("cannot read file");
 	}
 	run(buf);
 	e_free(buf);
@@ -17728,13 +17731,13 @@ get_token_nib(void)
 
 	// number?
 
-	if (isdigit(*scan_str) || *scan_str == '.') {
-		while (isdigit(*scan_str)){
+	if (isdigit((int)*scan_str) || *scan_str == '.') {
+		while (isdigit((int)*scan_str)){
 			scan_str++;
 		}
 		if (*scan_str == '.') {
 			scan_str++;
-			while (isdigit(*scan_str)){
+			while (isdigit((int)*scan_str)){
 				scan_str++;
 			}
 			if (token_str + 1 == scan_str){
@@ -17750,8 +17753,8 @@ get_token_nib(void)
 
 	// symbol?
 
-	if (isalpha(*scan_str)) {
-		while (isalnum(*scan_str))
+	if (isalpha((int)*scan_str)) {
+		while (isalnum((int)*scan_str))
 			scan_str++;
 		if (*scan_str == '('){
 			token = T_FUNCTION;
@@ -18125,9 +18128,9 @@ lookup(char *s)
 	int i, k;
 	struct atom *p;
 
-	if (isupper(*s)){
+	if (isupper((int)*s)){
 		k = BUCKETSIZE * (*s - 'A');
-	}else if (islower(*s)){
+	}else if (islower((int)*s)){
 		k = BUCKETSIZE * (*s - 'a');
 	}else{
 		k = BUCKETSIZE * 26;
