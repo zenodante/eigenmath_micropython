@@ -69,7 +69,7 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 extern int free_count;
 extern int MAXATOMS;
-static mp_obj_t eigenmath_statue(mp_obj_t self_in) {
+static mp_obj_t eigenmath_status(mp_obj_t self_in) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 	int fragmentation = e_heap_fragmentation();
     size_t free_bytes = e_heap_free();
@@ -82,7 +82,7 @@ static mp_obj_t eigenmath_statue(mp_obj_t self_in) {
 	return mp_const_none;
 
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_statue_obj, eigenmath_statue);
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_status_obj, eigenmath_status);
 
 
 
@@ -119,7 +119,7 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
-    { MP_ROM_QSTR(MP_QSTR_statue), MP_ROM_PTR(&eigenmath_statue_obj) },
+    { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&eigenmath_status_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
 
