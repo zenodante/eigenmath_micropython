@@ -1,6 +1,16 @@
 # eigenmath port for micropython
 
 ![PicoCalc screenshoot](./imgs/screenshot.jpg)
+
+
+
+## Firmware for PicoCalc system
+### With filesystem
+The uf2 file already included file system and main.py, boot.py. Just flash it and remove the usb link to the pico module, tune on the picocalc. 
+- **NO FILE COPY NEEDED!! The old file system will be destroyed!**
+- picocalc_micropython_ulab_eigenmath_withfilesystem_pico2.uf2 (you could use it with your pico 2 or pico 2w module)
+Included ulab, eigenmath port (https://github.com/zenodante/eigenmath_micropython), make picocalc a full function advanced calculator!
+
 ## Build Instructions
 eigenmath port for micropython, for example, here is the cmake commond for rp2 port.
 
