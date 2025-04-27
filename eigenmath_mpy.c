@@ -47,7 +47,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize heap"));
 		return MP_OBJ_NULL;
 	} 
-
+    
 
     eigenmath_init(self->pHeap,self->heapSize);
 
@@ -86,11 +86,11 @@ static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_status_obj, eigenmath_status);
 
 
 
-
+extern struct atom *zero;
 static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 	m_free(&self->pHeap); // deinitialize the hea
-	
+	zero = NULL;
 	return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);

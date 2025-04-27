@@ -935,6 +935,7 @@ void eigenmath_init(uint8_t *pHeap,size_t heapSize){
 	symtab = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
 	binding = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
 	usrfunc = (struct atom **)e_malloc((27 * BUCKETSIZE) * sizeOfpAtom);
+	zero = NULL;
 	if (stack == NULL || symtab == NULL || binding == NULL || usrfunc == NULL) {
 		mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Failed to initialize fixed ram area"));
 		return;
