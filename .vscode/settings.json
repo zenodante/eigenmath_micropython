@@ -2,6 +2,7 @@
     "files.associations": {
         "fcntl.h": "c",
         "stdlib.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "eigenmath.h": "c"
     }
 }

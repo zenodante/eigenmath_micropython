@@ -16,7 +16,7 @@
 #include "py/objstr.h"
 #include "py/gc.h"
 #include "eigenmath.h"
-
+#include "eheap.h"
 //-DPICO_STACK_SIZE=0x4000 ??
 
 typedef struct _mp_obj_eigenmath_t {
@@ -67,6 +67,25 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+extern int free_count;
+extern int MAXATOMS;
+static mp_obj_t eigenmath_statue(mp_obj_t self_in) {
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	int fragmentation = e_heap_fragmentation();
+    size_t free_bytes = e_heap_free();
+    size_t min_free = e_heap_min_free();
+    int num_atoms = free_count;
+    mp_printf(&mp_plat_print,"Heap fragmentation: %d%%\n", fragmentation);
+    mp_printf(&mp_plat_print,"Free bytes in Heap: %d\n", (int)free_bytes);
+    mp_printf(&mp_plat_print,"Minimum free bytes in Heap: %d\n", (int)min_free);
+    mp_printf(&mp_plat_print,"Number of free atoms: %d of %d\n", num_atoms,MAXATOMS);
+	return mp_const_none;
+
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_statue_obj, eigenmath_statue);
+
+
+
 
 static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 	mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
@@ -76,9 +95,10 @@ static mp_obj_t eigenmath_del(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
-
+extern struct atom *zero;
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
-	
+	eigenmath_init(self->pHeap,self->heapSize);
+    zero = NULL;//triger the symbol table initialization
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_reset_obj, eigenmath_reset);
@@ -98,6 +118,7 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
+    { MP_ROM_QSTR(MP_QSTR_statue), MP_ROM_PTR(&eigenmath_statue_obj) },
 };
 static MP_DEFINE_CONST_DICT(eigenmath_locals_dict, eigenmath_locals_dict_table);
 

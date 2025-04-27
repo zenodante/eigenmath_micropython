@@ -307,6 +307,7 @@ static void insert_free(block_t *blk) {
  size_t e_heap_free(void)     { return free_bytes; }
  size_t e_heap_min_free(void) { return min_free;   }
  
+
  int e_heap_fragmentation(void) {
      if (!initialized || free_bytes == 0) return 0;
      size_t largest = 0;
