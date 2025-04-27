@@ -2,6 +2,9 @@
 
 ![PicoCalc screenshoot](./imgs/screenshot.jpg)
 
+## Firmware for pico2
+-- micropython_ulab_eigenmath_pico2.uf2
+No file system included. Also added ulab from :https://github.com/v923z/micropython-ulab
 
 
 ## Firmware for PicoCalc system
