@@ -97,6 +97,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(eigenmath_del_obj, eigenmath_del);
 
 extern struct atom *zero;
 static mp_obj_t eigenmath_reset(mp_obj_t self_in) {
+    mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 	eigenmath_init(self->pHeap,self->heapSize);
     zero = NULL;//triger the symbol table initialization
     return mp_const_none;

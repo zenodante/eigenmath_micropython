@@ -25,7 +25,7 @@
  void*  e_realloc(void *ptr, size_t new_size);
  size_t e_heap_free(void);
  size_t e_heap_min_free(void);
-
+ int e_heap_fragmentation(void);
  #ifdef __cplusplus
  }
  #endif
