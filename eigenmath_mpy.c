@@ -160,6 +160,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_EigenMath,
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
+    call,eigenmath_run, // call handler for the run method
     attr, eigenmath_attr,           // attr handler before locals_dict
     locals_dict, &eigenmath_locals_dict,
     print, eigenmath_print
