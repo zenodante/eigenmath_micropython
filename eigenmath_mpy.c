@@ -67,6 +67,36 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+
+static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+    const mp_stream_p_t *stream_p = mp_get_stream(input_file_obj, MP_STREAM_OP_READ);
+    mp_off_t size = stream_p->ioctl(input_file_obj, MP_STREAM_SEEK,
+        MP_OBJ_NEW_SMALL_INT(0),
+        MP_OBJ_NEW_SMALL_INT(2));  // SEEK_END=2
+    stream_p->ioctl(input_file_obj, MP_STREAM_SEEK,
+            MP_OBJ_NEW_SMALL_INT(0),
+            MP_OBJ_NEW_SMALL_INT(0)); // SEEK_SET=0
+    char *buf = m_new(char, size + 1);  // +1
+
+    mp_uint_t out_sz = stream_p->read(input_file_obj, buf, size, NULL);
+    if (out_sz == MP_STREAM_ERROR) {
+        mp_raise_OSError(MP_EIO);
+    }
+
+    buf[out_sz] = '\0';
+	run(buf);
+
+
+	return mp_const_none;
+
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_runfile_obj, eigenmath_runfile);
+
+
+
+
+
 extern int free_count;
 extern int MAXATOMS;
 static mp_obj_t eigenmath_status(mp_obj_t self_in) {
@@ -118,6 +148,7 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 }
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
+    { MP_ROM_QSTR(MP_QSTR_runfile), MP_ROM_PTR(&eigenmath_runfile_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&eigenmath_status_obj) },
 };
