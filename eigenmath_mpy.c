@@ -84,43 +84,46 @@ static mp_obj_t eigenmath_call(mp_obj_t self_in, size_t n_args, size_t n_kw, con
 
 
 static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
+    const mp_stream_p_t *stream_p = mp_get_stream_raise(input_file_obj, MP_STREAM_OP_READ | MP_STREAM_OP_IOCTL);
 
-    const mp_stream_p_t *stream_p = mp_get_stream(input_file_obj);
-    
-    // get file size
     int error = 0;
-    uintptr_t seek_end = 2; // SEEK_END
-    mp_uint_t size = stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, seek_end, &error);
-    if (error != 0) {
+
+    // get file size
+    struct mp_stream_seek_t seek = {
+        .offset = 0,
+        .whence = MP_SEEK_END,
+    };
+    if (stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, (uintptr_t)&seek, &error) == MP_STREAM_ERROR) {
         mp_raise_OSError(error);
     }
-    
-    // move to the front
-    uintptr_t seek_set = 0; // SEEK_SET
-    stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, seek_set, &error);
-    if (error != 0) {
+    mp_off_t size = seek.offset;
+
+    // move to front
+    seek.offset = 0;
+    seek.whence = MP_SEEK_SET;
+    if (stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, (uintptr_t)&seek, &error) == MP_STREAM_ERROR) {
         mp_raise_OSError(error);
     }
-    
-    // get buff
-    char *buf = m_new(char, size + 1);  // +1 
-    
-    // readin
-    error = 0;
+
+    // get buffer
+    char *buf = m_new(char, size + 1);
+
+    // read file
     mp_uint_t out_sz = stream_p->read(input_file_obj, buf, size, &error);
-    if (error != 0) {
+    if (error != 0 || out_sz != size) {
+        m_del(char, buf, size + 1);
         mp_raise_OSError(error);
     }
-    
-    // add null terminator
+
+    // add end
     buf[out_sz] = '\0';
-    
+
     // run
     run(buf);
-    
+
     // release buffer
     m_del(char, buf, size + 1);
-    
+
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_runfile_obj, eigenmath_runfile);
