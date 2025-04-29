@@ -15,6 +15,7 @@
 #include "py/runtime.h"
 #include "py/objstr.h"
 #include "py/gc.h"
+#include "py/stream.h"
 #include "eigenmath.h"
 #include "eheap.h"
 //-DPICO_STACK_SIZE=0x4000 ??
@@ -68,28 +69,59 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
 
-static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
-	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-    const mp_stream_p_t *stream_p = mp_get_stream(input_file_obj, MP_STREAM_OP_READ);
-    mp_off_t size = stream_p->ioctl(input_file_obj, MP_STREAM_SEEK,
-        MP_OBJ_NEW_SMALL_INT(0),
-        MP_OBJ_NEW_SMALL_INT(2));  // SEEK_END=2
-    stream_p->ioctl(input_file_obj, MP_STREAM_SEEK,
-            MP_OBJ_NEW_SMALL_INT(0),
-            MP_OBJ_NEW_SMALL_INT(0)); // SEEK_SET=0
-    char *buf = m_new(char, size + 1);  // +1
+static mp_obj_t eigenmath_call(mp_obj_t self_in, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    //mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 
-    mp_uint_t out_sz = stream_p->read(input_file_obj, buf, size, NULL);
-    if (out_sz == MP_STREAM_ERROR) {
-        mp_raise_OSError(MP_EIO);
+    if (n_args != 1 || n_kw != 0) {
+        mp_raise_TypeError(MP_ERROR_TEXT("Expected 1 positional argument"));
     }
 
+    const char *cmd = mp_obj_str_get_str(args[0]);
+    run((char *)cmd);  // 
+    return mp_const_none;
+}
+
+
+
+static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
+
+    const mp_stream_p_t *stream_p = mp_get_stream(input_file_obj);
+    
+    // get file size
+    int error = 0;
+    uintptr_t seek_end = 2; // SEEK_END
+    mp_uint_t size = stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, seek_end, &error);
+    if (error != 0) {
+        mp_raise_OSError(error);
+    }
+    
+    // move to the front
+    uintptr_t seek_set = 0; // SEEK_SET
+    stream_p->ioctl(input_file_obj, MP_STREAM_SEEK, seek_set, &error);
+    if (error != 0) {
+        mp_raise_OSError(error);
+    }
+    
+    // get buff
+    char *buf = m_new(char, size + 1);  // +1 
+    
+    // readin
+    error = 0;
+    mp_uint_t out_sz = stream_p->read(input_file_obj, buf, size, &error);
+    if (error != 0) {
+        mp_raise_OSError(error);
+    }
+    
+    // add null terminator
     buf[out_sz] = '\0';
-	run(buf);
-
-
-	return mp_const_none;
-
+    
+    // run
+    run(buf);
+    
+    // release buffer
+    m_del(char, buf, size + 1);
+    
+    return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_runfile_obj, eigenmath_runfile);
 
@@ -160,7 +192,7 @@ MP_DEFINE_CONST_OBJ_TYPE(
     MP_QSTR_EigenMath,
     MP_TYPE_FLAG_NONE,
     make_new, eigenmath_make_new,
-    call,eigenmath_run, // call handler for the run method
+    call,eigenmath_call, // call handler for the run method
     attr, eigenmath_attr,           // attr handler before locals_dict
     locals_dict, &eigenmath_locals_dict,
     print, eigenmath_print
