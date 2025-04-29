@@ -14,6 +14,20 @@ The uf2 file already included file system and main.py, boot.py. Just flash it an
 - picocalc_micropython_ulab_eigenmath_withfilesystem_pico2.uf2 (you could use it with your pico 2 or pico 2w module)
 Included ulab, eigenmath port (https://github.com/zenodante/eigenmath_micropython), make picocalc a full function advanced calculator!
 
+```python
+
+import eigenmath
+em = eigenmath.EigenMath(300*1024) #apply 300kB heap from micropython GC
+em("d(sin(x),x)")#run commonds
+with open("filename",'r') as f:
+  em.runfile(f) #run script file
+em.status() #get memory status
+em.reset()#reset the heap and everything
+
+#if you are using the uf2 for picocalc, you don't need to init em, it has been init in the boot.py
+
+```
+
 ## Build Instructions
 eigenmath port for micropython, for example, here is the cmake command for rp2 port.
 
