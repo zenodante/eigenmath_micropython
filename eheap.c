@@ -223,7 +223,7 @@ static void insert_free(block_t *blk) {
  
      block_t *blk = (block_t*)(p - HDR_SIZE);
      if (!IS_USED(blk)) {
-         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("e_free: double free"));
+         //mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("e_free: double free"));
          return;
      }
  

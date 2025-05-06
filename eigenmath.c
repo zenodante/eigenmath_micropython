@@ -11434,6 +11434,7 @@ print_prefixform(struct atom *p)
 	outbuf_init();
 	prefixform(p);
 	outbuf_puts("\n");
+	//outbuf_puts("\0");
 	printbuf(outbuf, BLACK);
 }
 
@@ -15146,6 +15147,7 @@ fmt(void)
 	}
 
 	fmt_putw('\n'); // blank line after result
+	//fmt_putw('\0'); 
 	printbuf(outbuf, BLACK);
 }
 
@@ -16792,31 +16794,33 @@ outbuf_init(void)
 	outbuf_puts(""); // init outbuf as empty string
 }
 
-void
-outbuf_puts(char *s)
+
+void outbuf_puts(char *s)
 {
-	int len, m;
+    int len, m;
 
-	len = (int) strlen((const char *)s);
+    len = (int) strlen((const char *)s);
 
-	// Let outbuf_index + len == 1000
+    // Make sure there is enough room for new string + '\0' terminator
+    m = 1000 * ((outbuf_index + len + 1) / 1000 + 1); // +1 for '\0'
 
-	// Then m == 2000 hence there is always room for the terminator '\0'
+    if (m > outbuf_length) {
+        outbuf = e_realloc(outbuf, m);
+        if (outbuf == NULL) {
+            stopf("outbuf_puts: realloc failed");
+        }
+        outbuf_length = m;
+    }
 
-	m = 1000 * ((outbuf_index + len) / 1000 + 1); // m is a multiple of 1000
+    // Copy the string
+    memcpy(outbuf + outbuf_index, s, len);
+    outbuf_index += len;
 
-	if (m > outbuf_length) {
-		outbuf = e_realloc(outbuf, m);
-		if (outbuf == NULL){
-			stopf("outbuf_puts: realloc failed");
-		}
-		outbuf_length = m;
-	}
-
-	//strcpy(outbuf + outbuf_index, s);
-	memcpy(outbuf + outbuf_index, s, len);
-	outbuf_index += len;
+    // Always null-terminate
+    outbuf[outbuf_index] = '\0';
 }
+
+
 
 void
 outbuf_putc(int c)
