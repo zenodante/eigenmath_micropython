@@ -93,7 +93,7 @@ static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_calc_obj, eigenmath_calc);
 
 static mp_obj_t eigenmath_call(mp_obj_t self_in, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     //mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
-
+    noprint = false;
     if (n_args != 1 || n_kw != 0) {
         mp_raise_TypeError(MP_ERROR_TEXT("Expected 1 positional argument"));
     }
@@ -107,7 +107,7 @@ static mp_obj_t eigenmath_call(mp_obj_t self_in, size_t n_args, size_t n_kw, con
 
 static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
     const mp_stream_p_t *stream_p = mp_get_stream_raise(input_file_obj, MP_STREAM_OP_READ | MP_STREAM_OP_IOCTL);
-
+    noprint = false;
     int error = 0;
 
     // get file size
