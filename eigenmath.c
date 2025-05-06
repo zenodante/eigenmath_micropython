@@ -360,6 +360,9 @@ struct tensor {
 //#define Trace fprintf(stderr, "%s %d\n", __func__, __LINE__);
 #define Trace mp_printf(&mp_plat_print,"[TRACE]%s:%d\n",__func__,__LINE__);
 
+bool noprint = false;
+
+
 extern struct atom *mem; // an array of pointers
 extern struct atom *free_list;
 extern int tos; // top of stack
@@ -6427,7 +6430,9 @@ print_infixform(struct atom *p)
 	infixform_expr(p);
 	outbuf_puts("\n");
 	outbuf_puts("\0");
-	printbuf(outbuf, BLACK);
+	if (noprint == false){
+		printbuf(outbuf, BLACK);
+	}	
 }
 
 void

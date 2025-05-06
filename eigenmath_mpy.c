@@ -57,6 +57,7 @@ static mp_obj_t eigenmath_make_new(const mp_obj_type_t *type,
 static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
 	size_t len;
+    noprint = false;
     const char *buf = mp_obj_str_get_data(input_str_obj, &len);
 
 	//GET_STR_DATA_LEN(input_str_obj, str, str_len);
@@ -67,6 +68,29 @@ static mp_obj_t eigenmath_run(mp_obj_t self_in, mp_obj_t input_str_obj) {
 
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_run_obj, eigenmath_run);
+
+static mp_obj_t eigenmath_calc(mp_obj_t self_in, mp_obj_t input_str_obj) {
+	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
+	size_t len;
+    noprint = true;
+    const char *buf = mp_obj_str_get_data(input_str_obj, &len);
+
+	//GET_STR_DATA_LEN(input_str_obj, str, str_len);
+	run((char *)buf);
+
+    
+    //size_t len = strlen(outbuf);
+
+    // 
+    mp_obj_t bytearray = mp_obj_new_bytearray_by_ref(outbuf_length, outbuf);
+
+    // return memoryview
+    return mp_obj_new_memoryview(BYTEARRAY_TYPECODE, bytearray);
+
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(eigenmath_calc_obj, eigenmath_calc);
+
+
 
 static mp_obj_t eigenmath_runfile(mp_obj_t self_in, mp_obj_t input_file_obj) {
 	//mp_obj_eigenmath_t *self = MP_OBJ_TO_PTR(self_in);
@@ -148,6 +172,7 @@ mp_obj_t eigenmath_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 }
 static const mp_rom_map_elem_t eigenmath_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_run), MP_ROM_PTR(&eigenmath_run_obj) },
+    { MP_ROM_QSTR(MP_QSTR_calc), MP_ROM_PTR(&eigenmath_calc_obj) },
     { MP_ROM_QSTR(MP_QSTR_runfile), MP_ROM_PTR(&eigenmath_runfile_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&eigenmath_reset_obj) },
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&eigenmath_status_obj) },
