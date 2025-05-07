@@ -25,7 +25,7 @@ extern "C" {
 
 extern bool noprint;
 extern char *outbuf;
-extern int outbuf_length;
+extern int outbuf_index;
 extern void eigenmath_init(uint8_t *pHeap,size_t heapSize);
 extern void run(char *buf);
 #ifdef __cplusplus
