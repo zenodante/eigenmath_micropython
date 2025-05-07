@@ -79,7 +79,7 @@ static mp_obj_t eigenmath_run(size_t n_args, const mp_obj_t *args) {
 	run((char *)buf);
 
     if (noprint == true){
-        return mp_obj_new_bytearray_by_ref(outbuf_index+1, outbuf);
+        return mp_obj_new_bytearray_by_ref(outbuf_index-1, outbuf);
         // return memoryview
         //return mp_obj_new_memoryview(BYTEARRAY_TYPECODE, outbuf);
 
@@ -165,7 +165,7 @@ static mp_obj_t eigenmath_runfile(size_t n_args, const mp_obj_t *args ) {//mp_ob
     m_del(char, buf, size + 1);
 
     if (noprint == true){
-        return mp_obj_new_bytearray_by_ref(outbuf_index+1, outbuf);
+        return mp_obj_new_bytearray_by_ref(outbuf_index-1, outbuf);
         // return memoryview
         //return mp_obj_new_memoryview(BYTEARRAY_TYPECODE, bytearray);
 

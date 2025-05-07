@@ -11435,8 +11435,10 @@ print_prefixform(struct atom *p)
 	outbuf_init();
 	prefixform(p);
 	outbuf_puts("\n");
-	//outbuf_puts("\0");
-	printbuf(outbuf, BLACK);
+	outbuf_puts("\0");
+	if (noprint == false){
+		printbuf(outbuf, BLACK);
+	}
 }
 
 void
@@ -13392,8 +13394,9 @@ eval_status(struct atom *p1)
 
 	snprintf(strbuf, STRBUFLEN, "max_tos %d (%ld%%)\n", max_tos, (int32_t)(100 * max_tos / STACKSIZE));
 	outbuf_puts(strbuf);
-
-	printbuf(outbuf, BLACK);
+	if (noprint == false){
+		printbuf(outbuf, BLACK);
+	}
 
 	push_symbol(NIL);
 }
@@ -15149,7 +15152,10 @@ fmt(void)
 
 	fmt_putw('\n'); // blank line after result
 	//fmt_putw('\0'); 
-	printbuf(outbuf, BLACK);
+	if (noprint==false){
+		printbuf(outbuf, BLACK);
+	}
+	
 }
 
 void
@@ -16649,6 +16655,7 @@ void
 printbuf(char *s, int color)
 {
 	//fputs(s, stdout);
+
 	switch (color) {
 		case 0:
 			mp_printf(&mp_plat_print, "\x1b[37;40m%s\x1b[0m", s);//black
@@ -16659,7 +16666,9 @@ printbuf(char *s, int color)
 		case 2:
 			mp_printf(&mp_plat_print, "\x1b[37;41m%s\x1b[0m", s); // red
 			break;
-		}
+	}
+
+
 }
 
 void
@@ -17261,7 +17270,10 @@ print_trace(int color)
 	if (c != '\n'){
 		outbuf_putc('\n');
 	}
-	printbuf(outbuf, color);
+	if (noprint == false){
+		printbuf(outbuf, color);
+	}
+	
 }
 
 const char *init_script =
@@ -17290,10 +17302,15 @@ stopf(char *s)
 	if (nonstop){
 		longjmp(jmpbuf1, 1);
 	}
-	
 	print_trace(RED);
 	snprintf(strbuf, STRBUFLEN, "Stop: %s\n", s);
-	printbuf(strbuf, RED);
+	if (noprint == false){
+		printbuf(strbuf, RED);
+	}else{
+		//todo:push into outbuf
+		outbuf_puts(strbuf);
+	}
+	
 	longjmp(jmpbuf0, 1);
 }
 
