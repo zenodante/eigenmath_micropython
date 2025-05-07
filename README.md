@@ -19,6 +19,7 @@ Included ulab, eigenmath port (https://github.com/zenodante/eigenmath_micropytho
 import eigenmath
 em = eigenmath.EigenMath(300*1024) #apply 300kB heap from micropython GC
 em("d(sin(x),x)")#run commonds
+em.run("d(sin(x),x)",True) #optinal True means not print result, return result as a bytearray with \n\x0
 with open("filename",'r') as f:
   em.runfile(f) #run script file
 em.status() #get memory status
@@ -27,7 +28,7 @@ em.reset()#reset the heap and everything
 #if you are using the uf2 for picocalc, you don't need to init em, it has been init in the boot.py
 
 ```
-
+The optinal par for run() and runfile() config the output behavior, if set to True, the system won't print the result in REPL, but return the result as a bytearray. 
 ## Build Instructions
 eigenmath port for micropython, for example, here is the cmake command for rp2 port.
 
